@@ -1,0 +1,17 @@
+# Android / Gradle build outputs
+.gradle/
+build/
+app/build/
+local.properties
+*.apk
+*.aab
+*.keystore
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Native build caches (added with the engine later)
+.cxx/

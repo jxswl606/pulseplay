@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Plain platform Material theme (no extra XML dependency); Compose draws the real UI.
+         Dark window background so there is no white flash before Compose paints. -->
+    <style name="Theme.PulsePlay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/pp_background</item>
+        <item name="android:statusBarColor">@color/pp_background</item>
+        <item name="android:navigationBarColor">@color/pp_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

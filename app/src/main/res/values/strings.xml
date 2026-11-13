@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PulsePlay</string>
+    <string name="tagline">Remote Play for jailbroken PS5 — no PSN</string>
+    <string name="play">Play</string>
+    <string name="no_console">No PS5 added yet</string>
+    <string name="add_console">Add your PS5</string>
+</resources>
