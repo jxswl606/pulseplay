@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Allow plain-HTTP (cleartext) connections. The PS5 helper and chiaki Remote Play
+  both run unencrypted on the local network, so cleartext is required. This app only
+  ever talks to private LAN addresses (validated in HelperClient.isPrivateLanIpv4).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
