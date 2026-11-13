@@ -24,8 +24,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       # ubuntu-latest ships the Android SDK; licenses are pre-accepted.
+      # chmod keeps the build working even if gradlew arrived via web upload
+      # (which drops the Unix executable bit).
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
