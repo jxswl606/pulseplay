@@ -6,6 +6,7 @@
 package dev.pulseplay.stream
 
 import android.content.Context
+import dev.pulseplay.net.HelperError
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
