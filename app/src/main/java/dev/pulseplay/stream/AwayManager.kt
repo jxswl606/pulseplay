@@ -137,8 +137,8 @@ object AwayManager {
             if (settled && server == "connected" && !online) {
                 throw HelperError("away_offline", "Your PS5 isn't online for play away from home. Keep it on (not Rest Mode), online, with the helper running.")
             }
-            if (waited >= 30_000) {
-                if (online) throw HelperError("away_blocked", "Orbit Link sees your PS5 but couldn't connect to it directly. This network or your home router blocks direct connections; try another network.")
+            if (waited >= 45_000) {   // relay over carrier NAT can take a while to form
+                if (online) throw HelperError("away_blocked", "Orbit Link sees your PS5 but couldn't connect to it. This network or your home router blocks the connection; try another network.")
                 throw HelperError("away_unreachable", "Orbit Link couldn't reach its server. Check this device's internet connection.")
             }
             delay(500)

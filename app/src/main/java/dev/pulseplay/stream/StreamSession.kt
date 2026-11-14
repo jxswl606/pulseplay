@@ -54,15 +54,37 @@ class StreamSession(
         }
     }
 
+    /**
+     * Open the helper playback lease, retrying when away: a fresh Orbit Link tunnel can
+     * take several seconds before it carries the first helper request.
+     */
+    private suspend fun openLease(console: RegisteredConsole): String {
+        val attempts = if (console.host == "127.0.0.1") 15 else 1   // ~15 s of patience over the tunnel
+        var last: Exception? = null
+        repeat(attempts) { i ->
+            try {
+                val proof = HelperClient.sessionProof(console.host, console.token)
+                HelperClient.sessionOpen(console.host, console.token, proof)
+                return proof
+            } catch (e: dev.pulseplay.net.HelperError) {
+                last = e
+                if (e.code != "unreachable" || i == attempts - 1) throw e
+                delay(1000)
+            }
+        }
+        throw last ?: dev.pulseplay.net.HelperError("unreachable", "Couldn't reach the PS5.")
+    }
+
     fun start() {
         scope.launch {
             try {
                 active = resolveRoute()
                 val console = active                 // shadow: rest of start() uses the active route
-                // Keep Remote Play alive on the console via the helper lease.
-                val proof = HelperClient.sessionProof(console.host, console.token)
+                // Keep Remote Play alive on the console via the helper lease. Away, the tunnel
+                // often needs a few seconds to carry its first packet, so retry (mirrors
+                // Orbit Play's _refresh_through_link patience) instead of failing immediately.
+                val proof = openLease(console)
                 leaseProof = proof
-                HelperClient.sessionOpen(console.host, console.token, proof)
                 launch {
                     while (isActive && leaseProof != null) {
                         delay(10_000)
