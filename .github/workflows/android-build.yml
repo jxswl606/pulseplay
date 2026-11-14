@@ -29,6 +29,14 @@ jobs:
           # action's validator doesn't recognize. We only build with our own wrapper.
           validate-wrappers: false
 
+      # chiaki-ng's native build generates protobuf sources via nanopb, which needs
+      # the protobuf compiler (protoc) and the Python protobuf module.
+      - name: Install protobuf toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          python3 -m pip install --user --break-system-packages protobuf
+
       # ubuntu-latest ships the Android SDK; licenses are pre-accepted.
       # chmod keeps the build working even if gradlew arrived via web upload
       # (which drops the Unix executable bit).
