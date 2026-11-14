@@ -73,8 +73,11 @@ import dev.pulseplay.net.HelperClient
 import dev.pulseplay.net.HelperError
 import dev.pulseplay.stream.ActiveStream
 import dev.pulseplay.stream.ConsoleStore
+import dev.pulseplay.stream.Discovery
 import dev.pulseplay.stream.GamepadOverlay
+import dev.pulseplay.stream.QualityPreset
 import dev.pulseplay.stream.Registration
+import dev.pulseplay.stream.StreamPrefs
 import dev.pulseplay.stream.StreamSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -105,6 +108,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ConsoleStore.init(this)
+        StreamPrefs.init(this)
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = Colors) {
@@ -298,12 +302,16 @@ private fun LibraryContent() {
 
 @Composable
 private fun SettingsContent() {
+    var quality by remember { mutableStateOf(StreamPrefs.quality) }
     Column(Modifier.fillMaxSize()) {
         Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Text("Tune how PulsePlay streams from your PS5.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
-            SettingRow("Video quality", "720p · 60fps")
-            SettingRow("Bandwidth limit", "15 Mbps")
+            SettingRow("Video quality", quality.summary, onClick = {
+                quality = QualityPreset.values()[(quality.ordinal + 1) % QualityPreset.values().size]
+                StreamPrefs.set(quality)
+            })
+            SettingRow("Bandwidth limit", "Auto")
             SettingRow("Controller & touch", "On-screen + physical")
             SettingRow("Audio & mic", "On")
             SettingRow("Play away from home", "Off")
@@ -314,11 +322,13 @@ private fun SettingsContent() {
 }
 
 @Composable
-private fun SettingRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SettingRow(label: String, value: String, onClick: (() -> Unit)? = null) {
+    val base = Modifier.fillMaxWidth()
+    val m = if (onClick != null) base.clickable(onClick = onClick) else base
+    Row(m.padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        Text(value, color = Muted, fontSize = 13.sp)
+        Text(value, color = if (onClick != null) Accent else Muted, fontSize = 13.sp)
     }
 }
 
@@ -339,6 +349,15 @@ private fun PairScreen(onBack: () -> Unit) {
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = code, onValueChange = { if (it.text.length <= 6) code = it }, label = { Text("6-digit code") },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+        TextButton(enabled = !busy, onClick = {
+            busy = true; ok = false; status = "Searching for your PS5…"
+            scope.launch {
+                val found = Discovery.findPs5()
+                if (found != null) { ip = TextFieldValue(found); status = "Found $found" }
+                else status = "No PS5 found automatically — enter the IP above."
+                busy = false
+            }
+        }, modifier = Modifier.padding(top = 4.dp)) { Text("Find my PS5 automatically", color = Accent, fontSize = 13.sp) }
         Button(enabled = !busy, onClick = {
             status = ""; busy = true
             scope.launch {
@@ -364,12 +383,21 @@ private fun PairScreen(onBack: () -> Unit) {
 private fun StreamScreen(onExit: () -> Unit) {
     val console = ConsoleStore.console
     if (console == null) { onExit(); return }
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     var status by remember { mutableStateOf("Starting…") }
     val session = remember { StreamSession(console, { status = it }, { status = it }) }
     DisposableEffect(Unit) {
+        // Keep the screen awake and lock to landscape while streaming.
+        activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val prevOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         ActiveStream.session = session
         session.start()
-        onDispose { session.stop(); ActiveStream.clear() }
+        onDispose {
+            session.stop(); ActiveStream.clear()
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            prevOrientation?.let { activity.requestedOrientation = it }
+        }
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { ctx ->
@@ -382,8 +410,8 @@ private fun StreamScreen(onExit: () -> Unit) {
             }
         }, modifier = Modifier.fillMaxSize())
 
-        // On-screen controls, hidden once a physical controller is in use.
-        if (!ActiveStream.hasGamepad) GamepadOverlay()
+        // On-screen controls, hidden live once a physical controller is in use.
+        if (!ActiveStream.hasGamepadState.value) GamepadOverlay()
 
         Text(status, color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
         Button(onClick = onExit, colors = ButtonDefaults.buttonColors(containerColor = Color(0x66000000)),

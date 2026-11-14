@@ -12,7 +12,11 @@ import com.metallic.chiaki.lib.ControllerState
 
 object ActiveStream {
     @Volatile var session: StreamSession? = null
-    @Volatile var hasGamepad: Boolean = false
+    // Compose-observable so the on-screen pad hides live when a controller connects.
+    val hasGamepadState = androidx.compose.runtime.mutableStateOf(false)
+    var hasGamepad: Boolean
+        get() = hasGamepadState.value
+        set(v) { hasGamepadState.value = v }
     val state = ControllerState()
 
     private fun push() { session?.setControllerState(state) }

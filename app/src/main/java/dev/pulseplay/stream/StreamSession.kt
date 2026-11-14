@@ -51,9 +51,8 @@ class StreamSession(
                     }
                 }
 
-                val profile = ConnectVideoProfile.preset(
-                    VideoResolutionPreset.RES_720P, VideoFPSPreset.FPS_60, Codec.CODEC_H265,
-                )
+                val q = StreamPrefs.quality
+                val profile = ConnectVideoProfile.preset(q.res, q.fps, q.codec)
                 val info = ConnectInfo(console.ps5, console.host, console.registKey, console.morning, profile)
                 val s = Session(info, null, false)
                 s.eventCallback = { ev ->
