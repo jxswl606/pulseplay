@@ -79,3 +79,44 @@ intensity, haptics, microphone. chiaki-ng's Android app already handles the vide
 
 License: the engine patch and combined source are AGPL-3.0-only. Keep upstream licenses,
 patched-source revisions and third-party notices with any distribution.
+
+## DECISION (2026-11-13): PulsePlay helper = credited GPL fork of Orbit's
+- PulsePlay targets HANDHELDS (Android first), not desktop — that's its distinct identity
+  vs Orbit Play (desktop). The helper is client-agnostic, so the handheld focus shapes the
+  APP and feature set, not the helper internals.
+- The PS5 helper (ps5/, ~3,100 lines C, GPL-3.0-or-later) will be reused as a CREDITED FORK,
+  not rewritten from scratch. The valuable, hard-to-reproduce part is the reverse-engineered
+  native layer: sceRemoteplayInitialize/GeneratePinCode/ConfirmDeviceRegist and the
+  undocumented sceRegMgr* registry keys/offsets that enable Remote Play registration with no
+  PSN. Reimplementing that independently = months; the protocol (ps5/docs/protocol.md) is the
+  easy, reimplementable part.
+- GPL obligations when we fork the helper: keep it GPL-3.0-or-later, preserve upstream
+  copyright/license headers, state changes, ship full source, credit Orbit Play (saawant12).
+- SEQUENCING: do NOT fork/rebrand the helper yet. It works as-is (pairing proven on real
+  PS5, 2026-11-13). Get streaming working against the stock helper first (M1 core), THEN
+  fork + rebrand the helper and add PS5-side features. Don't block streaming on a rebrand.
+
+## STATUS
+- M1 scaffold: app builds via CI, installs, opens. DONE + device-tested (2026-11-13).
+- M2 trust-code pairing: POST /v1/unlock working against real PS5 (token). DONE + hardware-verified.
+- Design: locked direction — Signal logo (#4), side-menu nav, console-native look, splash with
+  glowing logo -> landscape home. Mockups in scratchpad (not yet in app).
+- NEXT: M1 core — live streaming via chiaki-ng.
+
+## STREAMING INTEGRATION POINT (resolved from chiaki-ng, 2026-11-14)
+chiaki-ng's Android app (android/app) already contains the full engine:
+  - JNI bridge: android/app/src/main/cpp/{chiaki-jni.c, video-decoder.c, audio-*.c}
+  - Kotlin wrapper: lib/Chiaki.kt (Session, Regist, RegistInfo, ChiakiNative externs)
+  - MediaCodec video decode, on-screen controller views (ButtonView/DPadView/AnalogStickView),
+    discovery, RegisteredHost storage.
+Registration API (Chiaki.kt):
+  RegistInfo(target=PS5_1, host, psnOnlineId?, psnAccountId: ByteArray?, pin: Int)
+  -> ChiakiNative.registStart(...) -> RegisteredHost{ registKey, RP key (morning), ... }
+  -> Session(registeredHost) streams.
+THE ONLY REAL CHANGE: replace chiaki's PSN-login step (which normally yields psnAccountId + the
+PS5-shown pin) with the Orbit helper flow:
+  POST /v1/unlock (6-digit) -> token ; POST /v1/pair + GET /v1/pair -> { account_id, pin(8 digit) }
+  -> build RegistInfo(psnAccountId=account_id bytes, pin=pin) -> registStart. No PSN servers.
+Everything downstream (session, video, audio, controllers) is reused unchanged.
+Build: chiaki-ng android builds via its .builds/android.yml (NDK + vcpkg deps). Native deps are
+the heavy part; reuse their CMake/vcpkg setup rather than rebuilding.
