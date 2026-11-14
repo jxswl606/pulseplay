@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -124,7 +125,10 @@ class MainActivity : ComponentActivity() {
                             ActiveStream.pendingGameId = gid
                             screen = if (ConsoleStore.console != null) Screen.STREAM else Screen.PAIR
                         })
-                        Screen.PAIR -> PairScreen(onBack = { screen = Screen.HOME })
+                        Screen.PAIR -> PairScreen(
+                            onBack = { screen = Screen.HOME },
+                            onPaired = { screen = Screen.STREAM },   // registered → stream right away
+                        )
                         Screen.STREAM -> StreamScreen(onExit = { screen = Screen.HOME })
                     }
                 }
@@ -400,7 +404,7 @@ private fun SettingRow(label: String, value: String, soon: Boolean = false, onCl
 }
 
 @Composable
-private fun PairScreen(onBack: () -> Unit) {
+private fun PairScreen(onBack: () -> Unit, onPaired: () -> Unit) {
     val scope = rememberCoroutineScope()
     var ip by remember { mutableStateOf(TextFieldValue("10.0.0.")) }
     var code by remember { mutableStateOf(TextFieldValue("")) }
@@ -408,10 +412,26 @@ private fun PairScreen(onBack: () -> Unit) {
     var status by remember { mutableStateOf("") }
     var ok by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    // Android's back gesture leaves the pair screen.
+    androidx.activity.compose.BackHandler(enabled = !busy) { onBack() }
+
+    // safeDrawingPadding keeps content clear of the status bar and the gesture pill;
+    // verticalScroll means nothing is cut off on short landscape screens.
+    Column(
+        Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Top bar with a visible back arrow.
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack, enabled = !busy) { Text("‹ Back", color = Muted, fontSize = 15.sp) }
+            Spacer(Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(4.dp))
         Text("Pair with your PS5", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Run the Orbit Play helper on your PS5, then enter its local IP and the 6-digit code it shows.",
-            color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 22.dp))
+            color = Muted, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp, bottom = 18.dp))
         OutlinedTextField(value = ip, onValueChange = { ip = it }, label = { Text("PS5 IP address") },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = code, onValueChange = { if (it.text.length <= 6) code = it }, label = { Text("6-digit code") },
@@ -431,8 +451,9 @@ private fun PairScreen(onBack: () -> Unit) {
                 try {
                     val host = ip.text.trim()
                     val token = withContext(Dispatchers.IO) { HelperClient.unlock(host, code.text.trim()) }
-                    val reg = Registration.register(host, token)
-                    ok = true; status = "Registered! ${reg.host} is ready. Tap Play on Home."
+                    Registration.register(host, token)
+                    ok = true; status = "Registered! Starting stream…"
+                    onPaired()                       // go straight into the stream
                 } catch (e: HelperError) { ok = false; status = e.message ?: "Pairing failed." }
                 catch (e: Exception) { ok = false; status = e.message ?: "Pairing failed." }
                 finally { busy = false }
@@ -441,8 +462,9 @@ private fun PairScreen(onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().height(54.dp).padding(top = 20.dp)) {
             Text(if (busy) "Connecting…" else "Connect", color = Color.White, fontSize = 17.sp)
         }
-        if (status.isNotEmpty()) Text(status, color = if (ok) Good else Color(0xFFF85149), fontSize = 14.sp, modifier = Modifier.padding(top = 16.dp))
-        TextButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) { Text("Back", color = Muted, fontSize = 14.sp) }
+        if (status.isNotEmpty()) Text(status, color = if (ok) Good else Color(0xFFF85149), fontSize = 14.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
+        Spacer(Modifier.height(12.dp))
     }
 }
 
