@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -140,42 +141,49 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** The Signal logo mark: a play triangle with two broadcast arcs. */
+/** The Signal logo mark: a play triangle with two broadcast arcs, fit inside its bounds. */
 @Composable
 private fun LogoMark(modifier: Modifier = Modifier, color: Color = Color.White) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         val tri = Path().apply {
-            moveTo(w * 0.30f, h * 0.28f); lineTo(w * 0.60f, h * 0.50f); lineTo(w * 0.30f, h * 0.72f); close()
+            moveTo(w * 0.20f, h * 0.28f); lineTo(w * 0.48f, h * 0.50f); lineTo(w * 0.20f, h * 0.72f); close()
         }
         drawPath(tri, color)
-        val stroke = Stroke(width = w * 0.055f)
-        drawArc(color, -55f, 110f, false, Offset(w * 0.40f, h * 0.22f),
-            androidx.compose.ui.geometry.Size(w * 0.44f, h * 0.56f), style = stroke)
-        drawArc(color.copy(alpha = 0.5f), -58f, 116f, false, Offset(w * 0.46f, h * 0.10f),
-            androidx.compose.ui.geometry.Size(w * 0.60f, h * 0.80f), style = stroke)
+        val stroke = Stroke(width = w * 0.06f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawArc(color, -58f, 116f, false, Offset(w * 0.40f, h * 0.26f),
+            androidx.compose.ui.geometry.Size(w * 0.30f, h * 0.48f), style = stroke)
+        drawArc(color.copy(alpha = 0.5f), -60f, 120f, false, Offset(w * 0.50f, h * 0.14f),
+            androidx.compose.ui.geometry.Size(w * 0.44f, h * 0.72f), style = stroke)
     }
 }
 
 @Composable
 private fun SplashScreen(onDone: () -> Unit) {
     val t = rememberInfiniteTransition(label = "glow")
-    val glow by t.animateFloat(0.45f, 1f, infiniteRepeatable(tween(1050), RepeatMode.Reverse), label = "g")
+    val glow by t.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1150), RepeatMode.Reverse), label = "g")
     LaunchedEffect(Unit) { delay(3000); onDone() }
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(contentAlignment = Alignment.Center) {
-            Box(Modifier.size(260.dp).clip(RoundedCornerShape(130.dp))
-                .background(Brush.radialGradient(listOf(Accent.copy(alpha = 0.55f * glow), Color.Transparent))))
-            Box(Modifier.size(150.dp).clip(RoundedCornerShape(38.dp))
-                .background(Brush.linearGradient(listOf(Bg2, Bg0))).padding(34.dp), contentAlignment = Alignment.Center) {
-                LogoMark(Modifier.fillMaxSize(), Accent.copy(alpha = 0.6f + 0.4f * glow))
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(contentAlignment = Alignment.Center) {
+                // soft radial glow
+                Box(Modifier.size(280.dp).background(
+                    Brush.radialGradient(listOf(Accent.copy(alpha = 0.40f * glow), Color.Transparent)), CircleShape))
+                // faint bloom of the mark
+                LogoMark(Modifier.size(156.dp), Accent.copy(alpha = 0.22f * glow))
+                // crisp glowing sign
+                LogoMark(Modifier.size(120.dp), Color(0xFF6BC0FF).copy(alpha = 0.78f + 0.22f * glow))
             }
-        }
-        Spacer(Modifier.height(28.dp))
-        Row {
-            Text("Pulse", color = OnDark, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            Text("Play", color = Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(34.dp))
+            Row {
+                Text("Pulse", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = androidx.compose.ui.graphics.Shadow(Accent.copy(alpha = glow), blurRadius = 26f)))
+                Text("Play", color = Color(0xFF6BC0FF), fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = androidx.compose.ui.graphics.Shadow(Accent.copy(alpha = glow), blurRadius = 30f)))
+            }
         }
     }
 }

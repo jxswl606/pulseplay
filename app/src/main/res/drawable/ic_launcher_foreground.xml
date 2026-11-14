@@ -1,10 +1,10 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Signal mark: play triangle + two broadcast arcs -->
-    <path android:fillColor="#FFFFFF" android:pathData="M38,36 L68,54 L38,72 Z"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round"
-        android:fillColor="#00000000" android:pathData="M72,40 A18,18 0 0 1 72,74"/>
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="6" android:strokeLineCap="round"
-        android:strokeAlpha="0.5" android:fillColor="#00000000" android:pathData="M80,31 A29,29 0 0 1 80,83"/>
+    <!-- Signal mark, kept inside the adaptive-icon safe zone (centre ~21..87) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M33,40 L53,54 L33,68 Z"/>
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="5.5" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M57,45 A12,12 0 0 1 57,63"/>
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="5.5" android:strokeLineCap="round"
+        android:strokeAlpha="0.5" android:fillColor="#00000000" android:pathData="M64,39 A19,19 0 0 1 64,69"/>
 </vector>
