@@ -24,6 +24,10 @@ jobs:
 
       - name: Set up Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # The chiaki-ng submodule ships its own Gradle wrapper jar, which this
+          # action's validator doesn't recognize. We only build with our own wrapper.
+          validate-wrappers: false
 
       # ubuntu-latest ships the Android SDK; licenses are pre-accepted.
       # chmod keeps the build working even if gradlew arrived via web upload
