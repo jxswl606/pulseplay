@@ -48,9 +48,16 @@ jobs:
 
       - name: Build Orbit Link node (arm64)
         working-directory: engine/orbit-link
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
         run: |
+          # The NDK path lives in the shell process env (ANDROID_NDK_ROOT), not in
+          # GitHub's ${{ env }} context, so resolve it here with fallbacks.
+          NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_ROOT}}"
+          if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
+            NDK="$(ls -d "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"/ndk/* 2>/dev/null | sort -V | tail -1)"
+          fi
+          echo "Using Android NDK at: $NDK"
+          test -d "$NDK" || { echo "::error::No Android NDK found on the runner"; exit 1; }
+          export ANDROID_NDK_HOME="$NDK"
           cargo ndk -t arm64-v8a --platform 26 build --release -p link-node
           mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a"
           cp target/aarch64-linux-android/release/orbit-link-node \
