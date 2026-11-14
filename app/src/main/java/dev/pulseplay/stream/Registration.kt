@@ -30,9 +30,13 @@ data class RegisteredConsole(
     val ps5: Boolean = true,
 )
 
+/** Away-from-home setup made at home: the PS5's Orbit Link peer key and the pre-authorized away token. */
+data class LinkConfig(val host: String, val key: String, val token: String)
+
 /** Holds the registered console and persists it so next launch is one tap. */
 object ConsoleStore {
     @Volatile var console: RegisteredConsole? = null
+    @Volatile var link: LinkConfig? = null
     private var prefs: android.content.SharedPreferences? = null
 
     private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
@@ -48,6 +52,27 @@ object ConsoleStore {
         val tok = p.getString("token", null)
         if (host != null && rk != null && mk != null && tok != null) {
             runCatching { console = RegisteredConsole(host, unhex(rk), unhex(mk), tok, p.getBoolean("ps5", true)) }
+        }
+        val lh = p.getString("link_host", null)
+        val lk = p.getString("link_key", null)
+        val lt = p.getString("link_token", null)
+        if (lh != null && lk != null && lt != null) link = LinkConfig(lh, lk, lt)
+    }
+
+    fun saveLink(c: LinkConfig) {
+        link = c
+        prefs?.edit()?.apply {
+            putString("link_host", c.host)
+            putString("link_key", c.key)
+            putString("link_token", c.token)
+            apply()
+        }
+    }
+
+    fun forgetLink() {
+        link = null
+        prefs?.edit()?.apply {
+            remove("link_host"); remove("link_key"); remove("link_token"); apply()
         }
     }
 

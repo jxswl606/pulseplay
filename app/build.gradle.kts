@@ -16,8 +16,8 @@ android {
         applicationId = "dev.pulseplay"
         minSdk = 26          // Android 8.0: floor for reliable MediaCodec hardware video decode.
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-m1"
+        versionCode = 3
+        versionName = "0.1.0-m3"
 
         // Build only arm64 for now (what real handhelds/phones use) to keep CI fast.
         ndk { abiFilters += "arm64-v8a" }

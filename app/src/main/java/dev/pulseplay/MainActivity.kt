@@ -38,6 +38,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -73,6 +75,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import dev.pulseplay.net.HelperClient
 import dev.pulseplay.net.HelperError
 import dev.pulseplay.stream.ActiveStream
+import dev.pulseplay.stream.AwayManager
 import dev.pulseplay.stream.ConsoleStore
 import dev.pulseplay.stream.Discovery
 import dev.pulseplay.stream.GamepadOverlay
@@ -314,7 +317,7 @@ private fun SettingsContent() {
     var quality by remember { mutableStateOf(StreamPrefs.quality) }
     var bitrate by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Text("Tune how PulsePlay streams from your PS5.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
@@ -326,10 +329,62 @@ private fun SettingsContent() {
             SettingRow("Controller & touch", controls, onClick = { StreamPrefs.toggleControls(); controls = StreamPrefs.controlsLabel() })
             SettingRow("Audio", "On")
             SettingRow("Microphone", "Coming soon", soon = true)
-            SettingRow("Play away from home", "Coming soon", soon = true)
+            AwaySetting()
         }
         Spacer(Modifier.height(16.dp))
-        TextButton(onClick = { ConsoleStore.forget() }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
+        TextButton(onClick = { ConsoleStore.forget(); ConsoleStore.forgetLink() }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
+    }
+}
+
+/** "Play away from home": set up once on home Wi-Fi, then the Play button works anywhere. */
+@Composable
+private fun AwaySetting() {
+    val scope = rememberCoroutineScope()
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var configured by remember { mutableStateOf(AwayManager.configured) }
+    var busy by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
+    var noteOk by remember { mutableStateOf(true) }
+
+    val value = when {
+        busy -> "Working…"
+        configured -> "On"
+        ConsoleStore.console == null -> "Pair first"
+        else -> "Set up"
+    }
+    Column {
+        SettingRow("Play away from home", value, soon = busy, onClick = {
+            val console = ConsoleStore.console
+            when {
+                console == null -> { note = "Pair your PS5 on home Wi-Fi first."; noteOk = false }
+                configured -> {
+                    // Turn it off: ask the PS5 to leave (best effort), then drop the saved key.
+                    busy = true; note = null
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            runCatching { HelperClient.link("POST", console.host, console.token, action = "leave") }
+                        }
+                        ConsoleStore.forgetLink(); AwayManager.disconnect()
+                        configured = false; busy = false; note = "Play away from home is off."; noteOk = true
+                    }
+                }
+                else -> {
+                    busy = true; note = null
+                    scope.launch {
+                        try {
+                            AwayManager.setupAtHome(appCtx) { s -> note = s; noteOk = true }
+                            configured = true
+                        } catch (e: HelperError) { note = e.message; noteOk = false }
+                        catch (e: Exception) { note = e.message ?: "Setup failed."; noteOk = false }
+                        finally { busy = false }
+                    }
+                }
+            }
+        })
+        note?.let {
+            Text(it, color = if (noteOk) Good else Color(0xFFF85149), fontSize = 12.sp,
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp))
+        }
     }
 }
 
@@ -398,7 +453,8 @@ private fun StreamScreen(onExit: () -> Unit) {
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     var status by remember { mutableStateOf("Starting…") }
     var quit by remember { mutableStateOf(false) }
-    val session = remember { StreamSession(console, { status = it }, { reason -> status = reason; quit = true }) }
+    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val session = remember { StreamSession(appCtx, console, { status = it }, { reason -> status = reason; quit = true }) }
     // When the stream ends (or drops), show the reason briefly then return Home — no hang.
     LaunchedEffect(quit) { if (quit) { delay(900); onExit() } }
     DisposableEffect(Unit) {

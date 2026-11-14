@@ -145,6 +145,28 @@ object HelperClient {
         return out
     }
 
+    /**
+     * Away-from-home control: GET /v1/link (console state) or POST /v1/link/<action>
+     * (setup / invite / key / leave) with the X-Orbit-Play-Link-* headers.
+     * Mirrors Orbit Play helper.py link(). Returns the parsed JSON.
+     */
+    fun link(
+        method: String,
+        host: String,
+        token: String,
+        action: String = "",
+        server: String? = null,
+        network: String? = null,
+        code: String? = null,
+    ): JSONObject {
+        val path = "/v1/link" + if (action.isNotEmpty()) "/$action" else ""
+        val extra = HashMap<String, String>()
+        if (server != null) extra["X-Orbit-Play-Link-Server"] = server
+        if (network != null) extra["X-Orbit-Play-Link-Network"] = network
+        if (code != null) extra["X-Orbit-Play-Link-Code"] = code
+        return request(method, host, path, token = token, linkHeaders = extra)
+    }
+
     /** Low-level request mirroring helper.py; returns the parsed JSON object. */
     private fun request(
         method: String,
@@ -153,6 +175,7 @@ object HelperClient {
         code: String? = null,
         token: String? = null,
         proof: String? = null,
+        linkHeaders: Map<String, String>? = null,
     ): JSONObject {
         val url = URL("http", host, PORT, path)
         val conn = (url.openConnection() as HttpURLConnection).apply {
@@ -165,6 +188,7 @@ object HelperClient {
             if (token != null) setRequestProperty("Authorization", "Bearer $token")
             if (code != null) setRequestProperty("X-Orbit-Play-Code", code)
             if (proof != null) setRequestProperty("X-Orbit-Play-Review", proof)
+            linkHeaders?.forEach { (k, v) -> setRequestProperty(k, v) }
         }
         try {
             val status = conn.responseCode
@@ -177,7 +201,12 @@ object HelperClient {
             }
             if (status >= 400) {
                 val c = json.optString("code", "helper")
-                throw HelperError(c, messageFor(c))
+                // /v1/link failures carry the server's own human message in "error".
+                val linkErr = json.optString("error", "")
+                throw HelperError(
+                    c,
+                    if (path.startsWith("/v1/link") && linkErr.isNotEmpty()) linkErr else messageFor(c),
+                )
             }
             return json
         } catch (e: HelperError) {
