@@ -26,6 +26,7 @@ data class RegisteredConsole(
     val host: String,
     val registKey: ByteArray,
     val morning: ByteArray,
+    val token: String,          // helper trust token, for the playback lease
     val ps5: Boolean = true,
 )
 
@@ -70,6 +71,6 @@ object Registration {
             regist?.dispose()
         }
 
-        RegisteredConsole(ip, registHost.rpRegistKey, registHost.rpKey).also { ConsoleStore.console = it }
+        RegisteredConsole(ip, registHost.rpRegistKey, registHost.rpKey, token).also { ConsoleStore.console = it }
     }
 }

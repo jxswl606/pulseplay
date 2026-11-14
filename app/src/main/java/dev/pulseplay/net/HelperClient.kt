@@ -146,7 +146,6 @@ object HelperClient {
             if (token != null) setRequestProperty("Authorization", "Bearer $token")
             if (code != null) setRequestProperty("X-Orbit-Play-Code", code)
             if (proof != null) setRequestProperty("X-Orbit-Play-Review", proof)
-            if (method == "POST") { doOutput = true; setFixedLengthStreamingMode(0) }
         }
         try {
             val status = conn.responseCode

@@ -65,9 +65,15 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.viewinterop.AndroidView
 import dev.pulseplay.net.HelperClient
 import dev.pulseplay.net.HelperError
+import dev.pulseplay.stream.ConsoleStore
 import dev.pulseplay.stream.Registration
+import dev.pulseplay.stream.StreamSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,7 +96,7 @@ private val Colors = darkColorScheme(
 
 private fun screenBg() = Brush.verticalGradient(listOf(Bg2, Bg1, Bg0))
 
-private enum class Screen { SPLASH, HOME, PAIR }
+private enum class Screen { SPLASH, HOME, PAIR, STREAM }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,8 +108,11 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(screenBg())) {
                     when (screen) {
                         Screen.SPLASH -> SplashScreen(onDone = { screen = Screen.HOME })
-                        Screen.HOME -> HomeScreen(onAddPs5 = { screen = Screen.PAIR })
+                        Screen.HOME -> HomeScreen(onPlay = {
+                            screen = if (ConsoleStore.console != null) Screen.STREAM else Screen.PAIR
+                        })
                         Screen.PAIR -> PairScreen(onBack = { screen = Screen.HOME })
+                        Screen.STREAM -> StreamScreen(onExit = { screen = Screen.HOME })
                     }
                 }
             }
@@ -171,7 +180,7 @@ private fun SplashScreen(onDone: () -> Unit) {
 }
 
 @Composable
-private fun HomeScreen(onAddPs5: () -> Unit) {
+private fun HomeScreen(onPlay: () -> Unit) {
     Row(Modifier.fillMaxSize()) {
         // ---- side menu ----
         Column(
@@ -227,7 +236,7 @@ private fun HomeScreen(onAddPs5: () -> Unit) {
                     Text("10.0.0.186 · Ready to stream", color = Muted, fontSize = 12.sp)
                 }
                 Button(
-                    onClick = onAddPs5,
+                    onClick = onPlay,
                     colors = ButtonDefaults.buttonColors(containerColor = Accent),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.height(54.dp).width(150.dp),
@@ -341,5 +350,41 @@ private fun PairScreen(onBack: () -> Unit) {
         TextButton(onClick = onBack, modifier = Modifier.padding(top = 8.dp)) {
             Text("Back", color = Muted, fontSize = 14.sp)
         }
+    }
+}
+
+@Composable
+private fun StreamScreen(onExit: () -> Unit) {
+    val console = ConsoleStore.console
+    if (console == null) { onExit(); return }
+    var status by remember { mutableStateOf("Starting…") }
+    val session = remember { StreamSession(console, { status = it }, { status = it }) }
+    DisposableEffect(Unit) {
+        session.start()
+        onDispose { session.stop() }
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    holder.addCallback(object : SurfaceHolder.Callback {
+                        override fun surfaceCreated(h: SurfaceHolder) { session.setSurface(h.surface) }
+                        override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) {}
+                        override fun surfaceDestroyed(h: SurfaceHolder) { session.setSurface(null) }
+                    })
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+        Text(
+            status, color = Color.White, fontSize = 13.sp,
+            modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+        )
+        Button(
+            onClick = onExit,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0x66000000)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+        ) { Text("Disconnect", color = Color.White, fontSize = 14.sp) }
     }
 }
