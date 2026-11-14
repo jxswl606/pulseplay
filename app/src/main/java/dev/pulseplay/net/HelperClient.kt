@@ -126,6 +126,20 @@ object HelperClient {
         try { request("POST", host, "/v1/session/end", token = token, proof = proof) } catch (_: HelperError) {}
     }
 
+    /** An installed game/app on the console. */
+    class Game(val id: String, val name: String, val platform: String)
+
+    /** GET /v1/games: the installed titles (name + id; no cover art from the stock helper). */
+    fun games(host: String, token: String): List<Game> {
+        val arr = request("GET", host, "/v1/games", token = token).optJSONArray("games") ?: return emptyList()
+        val out = ArrayList<Game>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            out.add(Game(o.optString("id"), o.optString("name"), o.optString("platform")))
+        }
+        return out
+    }
+
     /** Low-level request mirroring helper.py; returns the parsed JSON object. */
     private fun request(
         method: String,

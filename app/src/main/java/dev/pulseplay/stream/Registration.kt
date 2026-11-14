@@ -30,9 +30,43 @@ data class RegisteredConsole(
     val ps5: Boolean = true,
 )
 
-/** Holds the last registered console so the stream screen can reach it. */
+/** Holds the registered console and persists it so next launch is one tap. */
 object ConsoleStore {
     @Volatile var console: RegisteredConsole? = null
+    private var prefs: android.content.SharedPreferences? = null
+
+    private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+    private fun unhex(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    /** Load any saved console on app start. */
+    fun init(context: android.content.Context) {
+        val p = context.applicationContext.getSharedPreferences("pulseplay", android.content.Context.MODE_PRIVATE)
+        prefs = p
+        val host = p.getString("host", null)
+        val rk = p.getString("registKey", null)
+        val mk = p.getString("morning", null)
+        val tok = p.getString("token", null)
+        if (host != null && rk != null && mk != null && tok != null) {
+            runCatching { console = RegisteredConsole(host, unhex(rk), unhex(mk), tok, p.getBoolean("ps5", true)) }
+        }
+    }
+
+    fun save(c: RegisteredConsole) {
+        console = c
+        prefs?.edit()?.apply {
+            putString("host", c.host)
+            putString("registKey", hex(c.registKey))
+            putString("morning", hex(c.morning))
+            putString("token", c.token)
+            putBoolean("ps5", c.ps5)
+            apply()
+        }
+    }
+
+    fun forget() {
+        console = null
+        prefs?.edit()?.clear()?.apply()
+    }
 }
 
 object Registration {
@@ -71,6 +105,6 @@ object Registration {
             regist?.dispose()
         }
 
-        RegisteredConsole(ip, registHost.rpRegistKey, registHost.rpKey, token).also { ConsoleStore.console = it }
+        RegisteredConsole(ip, registHost.rpRegistKey, registHost.rpKey, token).also { ConsoleStore.save(it) }
     }
 }
