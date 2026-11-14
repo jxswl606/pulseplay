@@ -3,6 +3,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.parcelize")   // Chiaki.kt's @Parcelize types
 }
 
 android {
@@ -65,6 +66,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs += "-opt-in=kotlin.ExperimentalUnsignedTypes"
     }
     buildFeatures {
         compose = true

@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import dev.pulseplay.net.HelperClient
 import dev.pulseplay.net.HelperError
+import dev.pulseplay.stream.Registration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -317,9 +318,15 @@ private fun PairScreen(onBack: () -> Unit) {
                 status = ""; busy = true
                 scope.launch {
                     try {
-                        val token = withContext(Dispatchers.IO) { HelperClient.unlock(ip.text.trim(), code.text.trim()) }
-                        ok = true; status = "Paired! Device trusted (token ${token.take(8)}…)."
+                        val host = ip.text.trim()
+                        // 1) trust this device  2) get the PIN  3) chiaki registration
+                        val token = withContext(Dispatchers.IO) { HelperClient.unlock(host, code.text.trim()) }
+                        val reg = Registration.register(host, token)
+                        ok = true
+                        status = "Registered! ${reg.host} is ready to stream."
                     } catch (e: HelperError) {
+                        ok = false; status = e.message ?: "Pairing failed."
+                    } catch (e: Exception) {
                         ok = false; status = e.message ?: "Pairing failed."
                     } finally { busy = false }
                 }
