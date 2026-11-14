@@ -129,6 +129,11 @@ object HelperClient {
     /** An installed game/app on the console. */
     class Game(val id: String, val name: String, val platform: String)
 
+    /** POST /v1/games/<id>/launch: boot a game during the running stream (needs the lease proof). */
+    fun launch(host: String, token: String, id: String, proof: String) {
+        request("POST", host, "/v1/games/$id/launch", token = token, proof = proof)
+    }
+
     /** GET /v1/games: the installed titles (name + id; no cover art from the stock helper). */
     fun games(host: String, token: String): List<Game> {
         val arr = request("GET", host, "/v1/games", token = token).optJSONArray("games") ?: return emptyList()

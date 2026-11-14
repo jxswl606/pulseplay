@@ -116,7 +116,8 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(screenBg())) {
                     when (screen) {
                         Screen.SPLASH -> SplashScreen(onDone = { screen = Screen.HOME })
-                        Screen.HOME -> HomeScreen(onPlay = {
+                        Screen.HOME -> HomeScreen(onStream = { gid ->
+                            ActiveStream.pendingGameId = gid
                             screen = if (ConsoleStore.console != null) Screen.STREAM else Screen.PAIR
                         })
                         Screen.PAIR -> PairScreen(onBack = { screen = Screen.HOME })
@@ -180,14 +181,14 @@ private fun SplashScreen(onDone: () -> Unit) {
 }
 
 @Composable
-private fun HomeScreen(onPlay: () -> Unit) {
+private fun HomeScreen(onStream: (String?) -> Unit) {
     var tab by remember { mutableStateOf(Tab.HOME) }
     Row(Modifier.fillMaxSize()) {
         Sidebar(tab) { tab = it }
         Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 28.dp, vertical = 26.dp)) {
             when (tab) {
-                Tab.HOME -> HomeContent(onPlay)
-                Tab.LIBRARY -> LibraryContent()
+                Tab.HOME -> HomeContent(onStream)
+                Tab.LIBRARY -> LibraryContent(onStream)
                 Tab.SETTINGS -> SettingsContent()
             }
         }
@@ -234,7 +235,7 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun HomeContent(onPlay: () -> Unit) {
+private fun HomeContent(onStream: (String?) -> Unit) {
     val console = ConsoleStore.console
     Column(Modifier.fillMaxSize()) {
         Text("Home", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
@@ -250,7 +251,7 @@ private fun HomeContent(onPlay: () -> Unit) {
                 Text("PlayStation 5", color = OnDark, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(if (console != null) "${console.host} · Ready to stream" else "Tap Play to pair your PS5", color = Muted, fontSize = 12.sp)
             }
-            Button(onClick = onPlay, colors = ButtonDefaults.buttonColors(containerColor = Accent),
+            Button(onClick = { onStream(null) }, colors = ButtonDefaults.buttonColors(containerColor = Accent),
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.height(54.dp).width(150.dp)) {
                 Text(if (console != null) "Play" else "Pair", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -266,7 +267,7 @@ private fun HomeContent(onPlay: () -> Unit) {
 }
 
 @Composable
-private fun LibraryContent() {
+private fun LibraryContent(onStream: (String?) -> Unit) {
     val console = ConsoleStore.console
     var games by remember { mutableStateOf<List<HelperClient.Game>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -289,7 +290,7 @@ private fun LibraryContent() {
                     horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     gridItems(games!!) { g ->
                         val c = palette[(g.id.hashCode() and 0x7fffffff) % palette.size]
-                        Column {
+                        Column(Modifier.clickable { onStream(g.id) }) {
                             Box(Modifier.aspectRatio(0.75f).clip(RoundedCornerShape(12.dp)).background(Brush.verticalGradient(listOf(c, Bg0))))
                             Text(g.name, color = OnDark, fontSize = 12.sp, maxLines = 2, modifier = Modifier.padding(top = 6.dp))
                         }

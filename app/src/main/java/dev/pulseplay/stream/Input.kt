@@ -12,6 +12,8 @@ import com.metallic.chiaki.lib.ControllerState
 
 object ActiveStream {
     @Volatile var session: StreamSession? = null
+    // A game id to boot once the stream connects (one-tap launch from Library).
+    @Volatile var pendingGameId: String? = null
     // Compose-observable so the on-screen pad hides live when a controller connects.
     val hasGamepadState = androidx.compose.runtime.mutableStateOf(false)
     var hasGamepad: Boolean

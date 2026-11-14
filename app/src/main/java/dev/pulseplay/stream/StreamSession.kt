@@ -57,7 +57,16 @@ class StreamSession(
                 val s = Session(info, null, false)
                 s.eventCallback = { ev ->
                     when (ev) {
-                        ConnectedEvent -> onStatus("Connected")
+                        ConnectedEvent -> {
+                            onStatus("Connected")
+                            // If the user tapped a specific game, boot it now the stream is live.
+                            val gid = ActiveStream.pendingGameId
+                            val p = leaseProof
+                            if (gid != null && p != null) {
+                                ActiveStream.pendingGameId = null
+                                scope.launch { try { HelperClient.launch(console.host, console.token, gid, p) } catch (_: Exception) {} }
+                            }
+                        }
                         is QuitEvent -> onQuit(ev.reasonString ?: "Disconnected")
                         is LoginPinRequestEvent -> onStatus("Login PIN required")
                         else -> {}
