@@ -312,6 +312,8 @@ private fun LibraryContent(onStream: (String?) -> Unit) {
 @Composable
 private fun SettingsContent() {
     var quality by remember { mutableStateOf(StreamPrefs.quality) }
+    var bitrate by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
+    var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
     Column(Modifier.fillMaxSize()) {
         Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Text("Tune how PulsePlay streams from your PS5.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 18.dp))
@@ -320,10 +322,11 @@ private fun SettingsContent() {
                 quality = QualityPreset.values()[(quality.ordinal + 1) % QualityPreset.values().size]
                 StreamPrefs.set(quality)
             })
-            SettingRow("Bandwidth limit", "Auto")
-            SettingRow("Controller & touch", "On-screen + physical")
-            SettingRow("Audio & mic", "On")
-            SettingRow("Play away from home", "Off")
+            SettingRow("Bandwidth limit", bitrate, onClick = { StreamPrefs.cycleBitrate(); bitrate = StreamPrefs.bitrateLabel() })
+            SettingRow("Controller & touch", controls, onClick = { StreamPrefs.toggleControls(); controls = StreamPrefs.controlsLabel() })
+            SettingRow("Audio", "On")
+            SettingRow("Microphone", "Coming soon", soon = true)
+            SettingRow("Play away from home", "Coming soon", soon = true)
         }
         Spacer(Modifier.height(16.dp))
         TextButton(onClick = { ConsoleStore.forget() }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
@@ -331,13 +334,13 @@ private fun SettingsContent() {
 }
 
 @Composable
-private fun SettingRow(label: String, value: String, onClick: (() -> Unit)? = null) {
-    val base = Modifier.fillMaxWidth()
-    val m = if (onClick != null) base.clickable(onClick = onClick) else base
+private fun SettingRow(label: String, value: String, soon: Boolean = false, onClick: (() -> Unit)? = null) {
+    val clickable = onClick != null && !soon
+    val m = if (clickable) Modifier.fillMaxWidth().clickable(onClick = onClick!!) else Modifier.fillMaxWidth()
     Row(m.padding(horizontal = 18.dp, vertical = 17.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = if (soon) Muted else OnDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        Text(value, color = if (onClick != null) Accent else Muted, fontSize = 13.sp)
+        Text(value, color = if (soon) Color(0xFF586375) else if (clickable) Accent else Muted, fontSize = 13.sp)
     }
 }
 
@@ -394,7 +397,10 @@ private fun StreamScreen(onExit: () -> Unit) {
     if (console == null) { onExit(); return }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     var status by remember { mutableStateOf("Starting…") }
-    val session = remember { StreamSession(console, { status = it }, { status = it }) }
+    var quit by remember { mutableStateOf(false) }
+    val session = remember { StreamSession(console, { status = it }, { reason -> status = reason; quit = true }) }
+    // When the stream ends (or drops), show the reason briefly then return Home — no hang.
+    LaunchedEffect(quit) { if (quit) { delay(900); onExit() } }
     DisposableEffect(Unit) {
         // Keep the screen awake and lock to landscape while streaming.
         activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -419,8 +425,8 @@ private fun StreamScreen(onExit: () -> Unit) {
             }
         }, modifier = Modifier.fillMaxSize())
 
-        // On-screen controls, hidden live once a physical controller is in use.
-        if (!ActiveStream.hasGamepadState.value) GamepadOverlay()
+        // On-screen controls, hidden live once a physical controller is in use (unless forced on).
+        if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
 
         Text(status, color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
         Button(onClick = onExit, colors = ButtonDefaults.buttonColors(containerColor = Color(0x66000000)),

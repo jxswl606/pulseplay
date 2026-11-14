@@ -52,7 +52,16 @@ class StreamSession(
                 }
 
                 val q = StreamPrefs.quality
-                val profile = ConnectVideoProfile.preset(q.res, q.fps, q.codec)
+                val profile = if (StreamPrefs.bitrateMbps > 0) {
+                    val (w, h) = when (q.res) {
+                        VideoResolutionPreset.RES_540P -> 960 to 540
+                        VideoResolutionPreset.RES_1080P -> 1920 to 1080
+                        else -> 1280 to 720
+                    }
+                    ConnectVideoProfile(w, h, q.fps.value, StreamPrefs.bitrateMbps * 1000, q.codec)
+                } else {
+                    ConnectVideoProfile.preset(q.res, q.fps, q.codec)
+                }
                 val info = ConnectInfo(console.ps5, console.host, console.registKey, console.morning, profile)
                 val s = Session(info, null, false)
                 s.eventCallback = { ev ->
@@ -91,12 +100,20 @@ class StreamSession(
         session?.setControllerState(state)
     }
 
+    @Volatile private var stopped = false
+
     fun stop() {
+        if (stopped) return
+        stopped = true
         val p = leaseProof
         leaseProof = null
+        val s = session
+        session = null
+        // Detach the surface immediately so the UI is free; tear down in the background.
+        try { s?.setSurface(null) } catch (_: Exception) {}
         scope.launch {
-            try { session?.stop() } catch (_: Exception) {}
-            try { session?.dispose() } catch (_: Exception) {}
+            try { s?.stop() } catch (_: Exception) {}
+            try { s?.dispose() } catch (_: Exception) {}
             if (p != null) HelperClient.sessionEnd(console.host, console.token, p)
         }.invokeOnCompletion { scope.cancel() }
     }

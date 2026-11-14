@@ -22,17 +22,33 @@ enum class QualityPreset(
 
 object StreamPrefs {
     @Volatile var quality: QualityPreset = QualityPreset.BALANCED
+    @Volatile var bitrateMbps: Int = 0          // 0 = Auto (preset default)
+    @Volatile var alwaysShowControls: Boolean = false
     private var prefs: android.content.SharedPreferences? = null
+
+    val bitrateOptions = listOf(0, 10, 15, 20, 30)
+    fun bitrateLabel() = if (bitrateMbps == 0) "Auto" else "$bitrateMbps Mbps"
+    fun controlsLabel() = if (alwaysShowControls) "Always on-screen" else "Auto (hide with pad)"
 
     fun init(context: Context) {
         val p = context.applicationContext.getSharedPreferences("pulseplay", Context.MODE_PRIVATE)
         prefs = p
         quality = runCatching { QualityPreset.valueOf(p.getString("quality", null) ?: "BALANCED") }
             .getOrDefault(QualityPreset.BALANCED)
+        bitrateMbps = p.getInt("bitrate", 0)
+        alwaysShowControls = p.getBoolean("alwaysControls", false)
     }
 
-    fun set(q: QualityPreset) {
-        quality = q
-        prefs?.edit()?.putString("quality", q.name)?.apply()
+    fun set(q: QualityPreset) { quality = q; prefs?.edit()?.putString("quality", q.name)?.apply() }
+
+    fun cycleBitrate() {
+        val i = bitrateOptions.indexOf(bitrateMbps).let { if (it < 0) 0 else it }
+        bitrateMbps = bitrateOptions[(i + 1) % bitrateOptions.size]
+        prefs?.edit()?.putInt("bitrate", bitrateMbps)?.apply()
+    }
+
+    fun toggleControls() {
+        alwaysShowControls = !alwaysShowControls
+        prefs?.edit()?.putBoolean("alwaysControls", alwaysShowControls)?.apply()
     }
 }

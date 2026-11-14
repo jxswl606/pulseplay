@@ -42,8 +42,13 @@ import com.metallic.chiaki.lib.ControllerState
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-private val Fill = Color(0x33FFFFFF)
-private val Edge = Color(0x55FFFFFF)
+private val Fill = Color(0x1AFFFFFF)
+private val Edge = Color(0x3DFFFFFF)
+// Classic PlayStation face-symbol colours (translucent, Remote-Play style).
+private val CrossC = Color(0xFF7AA7FF)
+private val MoonC = Color(0xFFFF6B7A)
+private val BoxC = Color(0xFFE56BE0)
+private val PyramidC = Color(0xFF59E39B)
 
 @Composable
 fun GamepadOverlay() {
@@ -96,12 +101,12 @@ private fun pressMod(onDown: () -> Unit, onUp: () -> Unit) = Modifier.pointerInp
 }
 
 @Composable
-private fun PadButton(label: String, mask: UInt, d: androidx.compose.ui.unit.Dp, shape: androidx.compose.ui.graphics.Shape = CircleShape) {
+private fun PadButton(label: String, mask: UInt, d: androidx.compose.ui.unit.Dp, shape: androidx.compose.ui.graphics.Shape = CircleShape, labelColor: Color = Color.White) {
     Box(
         Modifier.padding(4.dp).size(d).background(Fill, shape).border(1.dp, Edge, shape)
             .then(pressMod({ ActiveStream.button(mask, true) }, { ActiveStream.button(mask, false) })),
         contentAlignment = Alignment.Center,
-    ) { Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+    ) { Text(label, color = labelColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
 }
 
 @Composable
@@ -125,10 +130,10 @@ private fun Trigger(label: String, left: Boolean) {
 @Composable
 private fun FaceButtons() {
     Box(Modifier.size(150.dp)) {
-        Box(Modifier.align(Alignment.TopCenter)) { PadButton("△", ControllerState.BUTTON_PYRAMID, 46.dp) }
-        Box(Modifier.align(Alignment.CenterStart)) { PadButton("□", ControllerState.BUTTON_BOX, 46.dp) }
-        Box(Modifier.align(Alignment.CenterEnd)) { PadButton("○", ControllerState.BUTTON_MOON, 46.dp) }
-        Box(Modifier.align(Alignment.BottomCenter)) { PadButton("✕", ControllerState.BUTTON_CROSS, 46.dp) }
+        Box(Modifier.align(Alignment.TopCenter)) { PadButton("△", ControllerState.BUTTON_PYRAMID, 46.dp, labelColor = PyramidC) }
+        Box(Modifier.align(Alignment.CenterStart)) { PadButton("□", ControllerState.BUTTON_BOX, 46.dp, labelColor = BoxC) }
+        Box(Modifier.align(Alignment.CenterEnd)) { PadButton("○", ControllerState.BUTTON_MOON, 46.dp, labelColor = MoonC) }
+        Box(Modifier.align(Alignment.BottomCenter)) { PadButton("✕", ControllerState.BUTTON_CROSS, 46.dp, labelColor = CrossC) }
     }
 }
 
