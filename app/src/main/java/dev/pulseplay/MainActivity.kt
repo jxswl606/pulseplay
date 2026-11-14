@@ -477,17 +477,28 @@ private fun StreamScreen(onExit: () -> Unit) {
     var quit by remember { mutableStateOf(false) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val session = remember { StreamSession(appCtx, console, { status = it }, { reason -> status = reason; quit = true }) }
+    var menuOpen by remember { mutableStateOf(false) }
     // When the stream ends (or drops), show the reason briefly then return Home — no hang.
     LaunchedEffect(quit) { if (quit) { delay(900); onExit() } }
+    // Back gesture opens the in-stream menu instead of killing the session outright.
+    androidx.activity.compose.BackHandler { menuOpen = !menuOpen }
     DisposableEffect(Unit) {
         // Keep the screen awake and lock to landscape while streaming.
         activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val prevOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // Immersive fullscreen: hide the status/navigation bars for the whole session.
+        val controller = activity?.window?.let {
+            androidx.core.view.WindowInsetsControllerCompat(it, it.decorView).apply {
+                systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         ActiveStream.session = session
         session.start()
         onDispose {
             session.stop(); ActiveStream.clear()
+            controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             prevOrientation?.let { activity.requestedOrientation = it }
         }
@@ -506,10 +517,44 @@ private fun StreamScreen(onExit: () -> Unit) {
         // On-screen controls, hidden live once a physical controller is in use (unless forced on).
         if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
 
-        Text(status, color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
-        Button(onClick = onExit, colors = ButtonDefaults.buttonColors(containerColor = Color(0x66000000)),
-            shape = RoundedCornerShape(12.dp), modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
-            Text("Disconnect", color = Color.White, fontSize = 14.sp)
+        // Connection feedback, centered, only until the first frame arrives.
+        if (!menuOpen && status != "Connected") {
+            Text(status, color = Color.White, fontSize = 15.sp, modifier = Modifier.align(Alignment.Center))
+        }
+
+        // Discreet menu handle, top-center. Tap (or the back gesture) opens the menu.
+        Box(
+            Modifier.align(Alignment.TopCenter).padding(top = 6.dp).size(width = 46.dp, height = 22.dp)
+                .clip(RoundedCornerShape(11.dp)).background(Color(0x40000000)).clickable { menuOpen = true },
+            contentAlignment = Alignment.Center,
+        ) { Text("•••", color = Color(0xCCFFFFFF), fontSize = 13.sp) }
+
+        if (menuOpen) StreamMenu(status = status, onResume = { menuOpen = false }, onDisconnect = onExit)
+    }
+}
+
+/** The in-stream menu (Remote Play style): a translucent overlay with status + Disconnect. */
+@Composable
+private fun StreamMenu(status: String, onResume: () -> Unit, onDisconnect: () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Color(0xBB05080F)).clickable(onClick = onResume),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.width(300.dp).clip(RoundedCornerShape(20.dp)).background(Panel).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("PlayStation 5", color = OnDark, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(status, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 22.dp))
+            Button(onClick = onResume, colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                Text("Resume", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(onClick = onDisconnect, colors = ButtonDefaults.buttonColors(containerColor = Color(0x22F85149)),
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                Text("Disconnect", color = Color(0xFFF85149), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }

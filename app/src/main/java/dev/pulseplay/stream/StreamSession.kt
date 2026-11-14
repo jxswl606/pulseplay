@@ -96,7 +96,7 @@ class StreamSession(
                                 scope.launch { try { HelperClient.launch(console.host, console.token, gid, p) } catch (_: Exception) {} }
                             }
                         }
-                        is QuitEvent -> onQuit(ev.reasonString ?: "Disconnected")
+                        is QuitEvent -> { if (!stopped) onQuit(ev.reasonString ?: "Disconnected") }
                         is LoginPinRequestEvent -> onStatus("Login PIN required")
                         else -> {}
                     }
@@ -129,14 +129,18 @@ class StreamSession(
         leaseProof = null
         val s = session
         session = null
-        // Detach the surface immediately so the UI is free; tear down in the background.
-        try { s?.setSurface(null) } catch (_: Exception) {}
         val route = active
         val wasAway = away
+        // Native teardown runs synchronously on the caller's (main) thread — the same
+        // order and thread as chiaki-ng's own shutdown(). Detach the surface, stop the
+        // session (this joins its threads), then dispose. Tearing the native decoder down
+        // off-thread is a classic crash, so we don't. Throwable also catches linker errors.
+        try { s?.setSurface(null) } catch (_: Throwable) {}
+        try { s?.stop() } catch (_: Throwable) {}
+        try { s?.dispose() } catch (_: Throwable) {}
+        // Only the network cleanup (lease release, tunnel) goes to the background.
         scope.launch {
-            try { s?.stop() } catch (_: Exception) {}
-            try { s?.dispose() } catch (_: Exception) {}
-            if (p != null) HelperClient.sessionEnd(route.host, route.token, p)
+            if (p != null) try { HelperClient.sessionEnd(route.host, route.token, p) } catch (_: Exception) {}
             if (wasAway) AwayManager.disconnect()     // bring down the tunnel
         }.invokeOnCompletion { scope.cancel() }
     }
