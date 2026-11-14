@@ -80,6 +80,14 @@ android {
             version = "3.22.1"
         }
     }
+
+    // Keep native libs uncompressed + extracted on install, so the bundled Orbit
+    // Link node (liborbitlinknode.so) can be executed from the native lib dir.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {

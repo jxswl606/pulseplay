@@ -15,3 +15,7 @@ local.properties
 
 # Native build caches (added with the engine later)
 .cxx/
+
+# CI-generated native node binary
+app/src/main/jniLibs/**/*.so
+engine/orbit-link/target/

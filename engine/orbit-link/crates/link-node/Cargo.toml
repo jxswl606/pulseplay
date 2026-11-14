@@ -1,0 +1,18 @@
+[package]
+name = "link-node"
+description = "Orbit Link for macOS, Linux and Windows: share this machine's ports on your Orbit Link network"
+license = "GPL-3.0-or-later"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "orbit-link-node"
+path = "src/main.rs"
+
+[dependencies]
+link-core.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true

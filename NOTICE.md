@@ -22,3 +22,9 @@ corresponding source to its users. The source lives in this repository.
 
 Full upstream license texts and native-dependency notices are retained under
 `third_party/` as the engine is integrated.
+
+## Orbit Link (away-from-home / internet play)
+The `engine/orbit-link/` directory vendors the client node of **Orbit Link** by
+**saawant12** (https://github.com/saawant12/orbit-link), licensed **GPL-3.0-or-later**
+/ AGPL (see `engine/orbit-link/LICENSE-AGPL`). It is built unmodified and bundled so
+PulsePlay can tunnel to the PS5 when away from home. Credit and license preserved.
