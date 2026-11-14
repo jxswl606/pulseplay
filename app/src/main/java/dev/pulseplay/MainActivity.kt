@@ -497,7 +497,9 @@ private fun StreamScreen(onExit: () -> Unit) {
         ActiveStream.session = session
         session.start()
         onDispose {
-            session.stop(); ActiveStream.clear()
+            // Stop routing input first, then tear down the native session.
+            ActiveStream.clear()
+            session.stop()
             controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             prevOrientation?.let { activity.requestedOrientation = it }
@@ -507,8 +509,10 @@ private fun StreamScreen(onExit: () -> Unit) {
         AndroidView(factory = { ctx ->
             SurfaceView(ctx).apply {
                 holder.addCallback(object : SurfaceHolder.Callback {
-                    override fun surfaceCreated(h: SurfaceHolder) { session.setSurface(h.surface) }
-                    override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) {}
+                    // Attach in surfaceChanged (valid dimensions), detach in surfaceDestroyed —
+                    // exactly how chiaki-ng drives the decoder's surface.
+                    override fun surfaceCreated(h: SurfaceHolder) {}
+                    override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) { session.setSurface(h.surface) }
                     override fun surfaceDestroyed(h: SurfaceHolder) { session.setSurface(null) }
                 })
             }

@@ -32,6 +32,7 @@ class StreamSession(
     private val onQuit: (String) -> Unit,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private var session: Session? = null
     @Volatile private var leaseProof: String? = null
     @Volatile private var surface: Surface? = null
@@ -84,21 +85,26 @@ class StreamSession(
                 }
                 val info = ConnectInfo(console.ps5, console.host, console.registKey, console.morning, profile)
                 val s = Session(info, null, false)
+                // chiaki fires events on a native thread. Marshal to the main thread so UI
+                // state is never touched off-thread (a crash risk, especially during teardown).
                 s.eventCallback = { ev ->
-                    when (ev) {
-                        ConnectedEvent -> {
-                            onStatus("Connected")
-                            // If the user tapped a specific game, boot it now the stream is live.
-                            val gid = ActiveStream.pendingGameId
-                            val p = leaseProof
-                            if (gid != null && p != null) {
-                                ActiveStream.pendingGameId = null
-                                scope.launch { try { HelperClient.launch(console.host, console.token, gid, p) } catch (_: Exception) {} }
+                    main.post {
+                        if (stopped) return@post
+                        when (ev) {
+                            ConnectedEvent -> {
+                                onStatus("Connected")
+                                // If the user tapped a specific game, boot it now the stream is live.
+                                val gid = ActiveStream.pendingGameId
+                                val p = leaseProof
+                                if (gid != null && p != null) {
+                                    ActiveStream.pendingGameId = null
+                                    scope.launch { try { HelperClient.launch(console.host, console.token, gid, p) } catch (_: Exception) {} }
+                                }
                             }
+                            is QuitEvent -> onQuit(ev.reasonString ?: "Disconnected")
+                            is LoginPinRequestEvent -> onStatus("Login PIN required")
+                            else -> {}
                         }
-                        is QuitEvent -> { if (!stopped) onQuit(ev.reasonString ?: "Disconnected") }
-                        is LoginPinRequestEvent -> onStatus("Login PIN required")
-                        else -> {}
                     }
                 }
                 session = s
