@@ -206,7 +206,7 @@ private fun HomeScreen(onStream: (String?) -> Unit) {
             when (tab) {
                 Tab.HOME -> HomeContent(onStream)
                 Tab.LIBRARY -> LibraryContent(onStream)
-                Tab.SETTINGS -> SettingsContent()
+                Tab.SETTINGS -> SettingsContent(onForget = { tab = Tab.HOME })
             }
         }
     }
@@ -339,7 +339,7 @@ private fun LibraryContent(onStream: (String?) -> Unit) {
 }
 
 @Composable
-private fun SettingsContent() {
+private fun SettingsContent(onForget: () -> Unit = {}) {
     var quality by remember { mutableStateOf(StreamPrefs.quality) }
     var bitrate by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
@@ -360,7 +360,14 @@ private fun SettingsContent() {
             AwaySetting()
         }
         Spacer(Modifier.height(16.dp))
-        TextButton(onClick = { ConsoleStore.forget(); ConsoleStore.forgetLink() }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
+        TextButton(onClick = {
+            runCatching {
+                AwayManager.disconnect()      // stop any tunnel node before dropping keys
+                ConsoleStore.forget()
+                ConsoleStore.forgetLink()
+            }
+            onForget()                        // return to the home screen
+        }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
     }
 }
 
@@ -424,6 +431,10 @@ private fun SettingRow(label: String, value: String, soon: Boolean = false, onCl
         Text(label, color = if (soon) Muted else OnDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
         Text(value, color = if (soon) Color(0xFF586375) else if (clickable) Accent else Muted, fontSize = 13.sp)
+        if (clickable) {
+            Spacer(Modifier.width(8.dp))
+            Text("›", color = Muted, fontSize = 18.sp)        // tappable-row arrow pointer
+        }
     }
 }
 
