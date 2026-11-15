@@ -168,15 +168,15 @@ class StreamSession(
         session = null
         val route = active
         val wasAway = away
-        // Main thread, both instant: detach the surface, then signal stop. sessionStop
-        // only sets a flag — it does not block.
-        try { s?.setSurface(null) } catch (_: Throwable) {}
-        try { s?.stop() } catch (_: Throwable) {}
-        // dispose() calls sessionJoin, which BLOCKS until the stream threads end — on a
-        // dead/slow tunnel that can take seconds. Running it on the main thread froze the
-        // UI into an ANR ("hangs then crashes"), so it must go to the background. The
-        // surface is already detached and events are main-thread + guarded, so this is safe.
+        // ALL native teardown runs on a background thread so stop() returns instantly and
+        // can never freeze the UI. setSurface(null)/stop() are quick but still native, and
+        // dispose() calls sessionJoin which BLOCKS until the stream threads end (seconds on
+        // a dead/slow tunnel) — that main-thread block was the "disconnect freezes and
+        // crashes" ANR. Input is already gated off (live=false) and the session reference is
+        // nulled, so nothing else touches `s`.
         scope.launch {
+            try { s?.setSurface(null) } catch (_: Throwable) {}
+            try { s?.stop() } catch (_: Throwable) {}
             try { s?.dispose() } catch (_: Throwable) {}
             if (p != null) try { HelperClient.sessionEnd(route.host, route.token, p) } catch (_: Exception) {}
             if (wasAway) AwayManager.disconnect()     // bring down the tunnel
