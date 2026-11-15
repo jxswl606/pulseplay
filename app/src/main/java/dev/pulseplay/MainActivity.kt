@@ -123,6 +123,7 @@ class MainActivity : ComponentActivity() {
         StreamPrefs.init(this)
         dev.pulseplay.net.NetworkMonitor.init(this)
         enableEdgeToEdge()
+        hideSystemBars()
         setContent {
             MaterialTheme(colorScheme = Colors) {
                 var screen by remember { mutableStateOf(Screen.SPLASH) }
@@ -153,6 +154,20 @@ class MainActivity : ComponentActivity() {
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
         if (ActiveStream.session != null && ActiveStream.onMotion(event)) return true
         return super.dispatchGenericMotionEvent(event)
+    }
+
+    /** Hide the Android status/navigation bars for the whole app (immersive). */
+    private fun hideSystemBars() {
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        androidx.core.view.WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()   // bars can re-appear after dialogs/keyboard; keep them hidden
     }
 }
 
@@ -705,7 +720,7 @@ private fun StreamScreen(onExit: () -> Unit) {
             // Stop routing input first, then tear down the native session.
             ActiveStream.clear()
             session.stop()
-            controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            // Leave the system bars hidden (app-wide immersive); just drop keep-screen-on.
             activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             prevOrientation?.let { activity.requestedOrientation = it }
         }
