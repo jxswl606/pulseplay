@@ -7,7 +7,7 @@ else
 endif
 
 ELF  := pulseplay-helper.elf
-SRCS := src/main.c src/httpd.c src/util.c src/pt.c src/rp.c
+SRCS := src/main.c src/router.c src/httpd.c src/util.c src/pt.c src/rp.c
 
 CFLAGS += -O2 -Wall -Isrc
 LDLIBS := -lkernel_sys -lSceRegMgr -lSceUserService -lpthread
