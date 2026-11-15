@@ -329,6 +329,13 @@ private fun HomeContent(onStream: (String?) -> Unit, navTo: (Tab) -> Unit) {
     val console = ConsoleStore.console
     val offline = dev.pulseplay.net.NetworkMonitor.offline()
     val netLabel = dev.pulseplay.net.NetworkMonitor.label()
+    // Real games pulled from the console (only when it's paired and reachable). No
+    // console / offline / can't-load → the strip is simply hidden, never faked.
+    var games by remember { mutableStateOf<List<HelperClient.Game>?>(null) }
+    LaunchedEffect(console, offline) {
+        if (console == null || offline) { games = null; return@LaunchedEffect }
+        games = try { withContext(Dispatchers.IO) { HelperClient.games(console.host, console.token) } } catch (e: Exception) { null }
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // Hero
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
@@ -376,12 +383,21 @@ private fun HomeContent(onStream: (String?) -> Unit, navTo: (Tab) -> Unit) {
                 Text("›", color = Muted, fontSize = 18.sp)
             }
         }
-        Spacer(Modifier.height(24.dp))
-        Text("Recently Played", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
-        val covers = listOf(Color(0xFF6A1020), Color(0xFFB81E2E), Color(0xFF1F4F7D), Color(0xFF5A3A1F))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(covers) { c -> Box(Modifier.width(120.dp).height(150.dp).clip(RoundedCornerShape(13.dp)).background(Brush.verticalGradient(listOf(c, Ink)))) }
+        val gs = games
+        if (!gs.isNullOrEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Text("Your Games", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(12.dp))
+            val palette = listOf(Color(0xFF243A5E), Color(0xFF4A2030), Color(0xFF1F4F5A), Color(0xFF3A2F5E), Color(0xFF5A3A1F), Color(0xFF20405E))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                items(gs.take(10)) { g ->
+                    val c = palette[(g.id.hashCode() and 0x7fffffff) % palette.size]
+                    Column(Modifier.width(120.dp).clickable { onStream(g.id) }) {   // tap → launch that game
+                        Box(Modifier.width(120.dp).height(150.dp).clip(RoundedCornerShape(13.dp)).background(Brush.verticalGradient(listOf(c, Ink))))
+                        Text(g.name, color = OnDark, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            }
         }
     }
 }
@@ -562,7 +578,6 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
 
         GroupLabel("GENERAL")
         Column(cardMod) {
-            SettingRow("Audio", "On")
             SettingRow("Microphone", "Coming soon", soon = true)
             AwaySetting()
         }
