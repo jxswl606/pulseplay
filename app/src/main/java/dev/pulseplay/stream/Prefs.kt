@@ -20,15 +20,16 @@ enum class Fps(val label: String, val v: Int) { F30("30", 30), F60("60", 60) }
 enum class Preset(val label: String) { PERFORMANCE("Performance"), BALANCED("Balanced"), QUALITY("Quality"), CUSTOM("Custom") }
 
 object StreamPrefs {
+    // Defaults = the Performance preset: smooth and low-latency on any network out of the box.
     @Volatile var res: Res = Res.R720
     @Volatile var fps: Fps = Fps.F60
-    @Volatile var codec: Codec = Codec.CODEC_H265
-    @Volatile var bitrateMbps: Int = 0           // 0 = Auto (per-resolution default)
+    @Volatile var codec: Codec = Codec.CODEC_H264
+    @Volatile var bitrateMbps: Int = 10          // 0 = Auto (per-resolution default)
     @Volatile var alwaysShowControls: Boolean = false
     @Volatile var overlayAlpha: Float = 0.85f
     private var prefs: android.content.SharedPreferences? = null
 
-    val bitrateSteps = listOf(0, 5, 10, 15, 20, 30, 40)     // 0 = Auto
+    val bitrateSteps = listOf(0, 5, 8, 10, 12, 15, 20, 25, 30, 40)     // 0 = Auto (Mbps)
     val opacityOptions = listOf(0.4f, 0.55f, 0.7f, 0.85f, 1.0f)
 
     fun summary() = "${res.label} · ${fps.label}fps"
@@ -36,18 +37,22 @@ object StreamPrefs {
     fun controlsLabel() = if (alwaysShowControls) "Always on-screen" else "Auto (hide with pad)"
     fun opacityLabel() = "${(overlayAlpha * 100).toInt()}%"
 
-    /** The preset matching the current settings, or CUSTOM. */
+    /** The preset matching the current settings, or CUSTOM.
+     *  Ladder — all 60fps so input stays responsive; they differ by resolution/codec/bitrate:
+     *   Performance 720p · H264 · 10 Mbps  (lowest latency, least data — best for mobile/away)
+     *   Balanced   1080p · H265 · 15 Mbps  (sharper, still smooth — good home-Wi-Fi default)
+     *   Quality    1080p · H265 · 25 Mbps  (max sharpness for fast LAN) */
     fun currentPreset(): Preset = when {
         res == Res.R720 && fps == Fps.F60 && codec == Codec.CODEC_H264 && bitrateMbps == 10 -> Preset.PERFORMANCE
-        res == Res.R720 && fps == Fps.F60 && codec == Codec.CODEC_H265 && bitrateMbps == 0 -> Preset.BALANCED
-        res == Res.R1080 && fps == Fps.F30 && codec == Codec.CODEC_H265 && bitrateMbps == 30 -> Preset.QUALITY
+        res == Res.R1080 && fps == Fps.F60 && codec == Codec.CODEC_H265 && bitrateMbps == 15 -> Preset.BALANCED
+        res == Res.R1080 && fps == Fps.F60 && codec == Codec.CODEC_H265 && bitrateMbps == 25 -> Preset.QUALITY
         else -> Preset.CUSTOM
     }
 
     fun applyPreset(p: Preset) = when (p) {
-        Preset.PERFORMANCE -> setAll(Res.R720, Fps.F60, Codec.CODEC_H264, 10)   // low bandwidth, smooth
-        Preset.BALANCED -> setAll(Res.R720, Fps.F60, Codec.CODEC_H265, 0)
-        Preset.QUALITY -> setAll(Res.R1080, Fps.F30, Codec.CODEC_H265, 30)       // high quality
+        Preset.PERFORMANCE -> setAll(Res.R720, Fps.F60, Codec.CODEC_H264, 10)
+        Preset.BALANCED -> setAll(Res.R1080, Fps.F60, Codec.CODEC_H265, 15)
+        Preset.QUALITY -> setAll(Res.R1080, Fps.F60, Codec.CODEC_H265, 25)
         Preset.CUSTOM -> {}
     }
 
@@ -76,8 +81,8 @@ object StreamPrefs {
         prefs = p
         res = runCatching { Res.valueOf(p.getString("res", null) ?: "R720") }.getOrDefault(Res.R720)
         fps = runCatching { Fps.valueOf(p.getString("fps", null) ?: "F60") }.getOrDefault(Fps.F60)
-        codec = runCatching { Codec.valueOf(p.getString("codec", null) ?: "CODEC_H265") }.getOrDefault(Codec.CODEC_H265)
-        bitrateMbps = p.getInt("bitrate", 0)
+        codec = runCatching { Codec.valueOf(p.getString("codec", null) ?: "CODEC_H264") }.getOrDefault(Codec.CODEC_H264)
+        bitrateMbps = p.getInt("bitrate", 10)
         alwaysShowControls = p.getBoolean("alwaysControls", false)
         overlayAlpha = p.getFloat("overlayAlpha", 0.85f)
     }

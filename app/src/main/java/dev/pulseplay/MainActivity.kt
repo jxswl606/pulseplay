@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.pulseplay.net.HelperClient
 import dev.pulseplay.net.HelperError
+import dev.pulseplay.net.NetworkTest
 import dev.pulseplay.stream.ActiveStream
 import dev.pulseplay.stream.AwayManager
 import dev.pulseplay.stream.ConsoleStore
@@ -552,6 +553,9 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
     var bw by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
     var opacity by remember { mutableStateOf(StreamPrefs.opacityLabel()) }
+    val scope = rememberCoroutineScope()
+    var testing by remember { mutableStateOf(false) }
+    var testResult by remember { mutableStateOf<NetworkTest.Result?>(null) }
     fun sync() { presetSel = StreamPrefs.currentPreset(); resSel = StreamPrefs.res; fpsSel = StreamPrefs.fps; bw = StreamPrefs.bitrateLabel() }
 
     val cardMod = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))
@@ -568,6 +572,20 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
             SegmentedRow("Resolution", Res.values().map { it.label }, Res.values().indexOf(resSel)) { i -> StreamPrefs.applyRes(Res.values()[i]); sync() }
             SegmentedRow("Frame rate", Fps.values().map { it.label }, Fps.values().indexOf(fpsSel)) { i -> StreamPrefs.applyFps(Fps.values()[i]); sync() }
             StepperRow("Bandwidth", bw, onMinus = { StreamPrefs.stepBitrate(false); sync() }, onPlus = { StreamPrefs.stepBitrate(true); sync() })
+        }
+
+        GroupLabel("NETWORK")
+        Column(cardMod) {
+            SettingRow(
+                if (testing) "Testing…" else "Test network",
+                if (testing) "" else (testResult?.let { "${it.grade} · ${it.avgMs} ms" } ?: "Measure latency"),
+                onClick = if (console != null && !testing) ({
+                    val host = console.host
+                    testing = true; testResult = null
+                    scope.launch { testResult = NetworkTest.run(host); testing = false }
+                }) else null,
+            )
+            testResult?.let { r -> NetworkResult(r) { StreamPrefs.applyPreset(r.recommend); sync() } }
         }
 
         GroupLabel("CONTROLS")
@@ -597,6 +615,49 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
 private fun GroupLabel(text: String) {
     Text(text, color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(start = 4.dp, top = 18.dp, bottom = 10.dp))
+}
+
+/** Network-test results: metric chips + the recommended preset with an Apply button. */
+@Composable
+private fun NetworkResult(r: NetworkTest.Result, onApply: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 14.dp)) {
+        if (!r.reachable) {
+            Text(r.note, color = Color(0xFFF0A05A), fontSize = 13.sp)
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Metric("Grade", r.grade, Modifier.weight(1f))
+                Metric("Latency", "${r.avgMs} ms", Modifier.weight(1f))
+                Metric("Jitter", "${r.jitterMs} ms", Modifier.weight(1f))
+                Metric("Loss", "${r.lossPct}%", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("${r.connection} · ${r.note}", color = Muted, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            val rec = when (r.recommend) {
+                Preset.PERFORMANCE -> "Performance"; Preset.BALANCED -> "Balanced"
+                Preset.QUALITY -> "Quality"; else -> "Custom"
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Recommended: $rec", color = OnDark, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.clip(RoundedCornerShape(50)).background(Accent).clickable(onClick = onApply)
+                    .padding(horizontal = 18.dp, vertical = 8.dp)) {
+                    Text("Apply", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Metric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).padding(vertical = 10.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(value, color = OnDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(label, color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+    }
 }
 
 /** A horizontal segmented picker — tap any option directly (moves both ways). */
