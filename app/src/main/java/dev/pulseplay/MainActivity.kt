@@ -497,9 +497,11 @@ private fun AboutContent() {
         Text("Free, open-source Remote Play for jailbroken PS5s — no PSN. Built on the work of:",
             color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 14.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
-            SettingRow("Orbit Play", "saawant12")
             SettingRow("chiaki-ng", "streetpea")
             SettingRow("Chiaki", "thestr4ng3r")
+            SettingRow("Orbit Play", "saawant12")
+            SettingRow("ps5-remoteplay-get-pin", "idlesauce")
+            SettingRow("PS5 Payload SDK", "John Törnblom")
             SettingRow("PS5 homebrew community", "")
         }
     }
