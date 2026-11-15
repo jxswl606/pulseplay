@@ -33,7 +33,8 @@ class StreamSession(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
-    private var session: Session? = null
+    // @Volatile: written on the IO connect thread, read on the main thread (input/surface).
+    @Volatile private var session: Session? = null
     @Volatile private var leaseProof: String? = null
     @Volatile private var surface: Surface? = null
     // The console actually in use: the saved LAN console at home, or a loopback
@@ -130,6 +131,15 @@ class StreamSession(
                     }
                 }
                 session = s
+                // If stop() landed during connect (before the session existed), it couldn't
+                // tear this down — so do it here instead of orphaning a live session.
+                if (stopped) {
+                    session = null
+                    try { s.setSurface(null) } catch (_: Throwable) {}
+                    try { s.stop() } catch (_: Throwable) {}
+                    kotlin.concurrent.thread { try { s.dispose() } catch (_: Throwable) {} }
+                    return@launch
+                }
                 surface?.let { s.setSurface(it) }
                 s.start()
                 onStatus("Connecting…")

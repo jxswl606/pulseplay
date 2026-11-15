@@ -90,7 +90,11 @@ object ConsoleStore {
 
     fun forget() {
         console = null
-        prefs?.edit()?.clear()?.apply()
+        // Remove only the console keys — StreamPrefs shares this prefs file, so clear()
+        // would also wipe video quality, bitrate and opacity.
+        prefs?.edit()?.apply {
+            remove("host"); remove("registKey"); remove("morning"); remove("token"); remove("ps5"); apply()
+        }
     }
 }
 
