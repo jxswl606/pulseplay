@@ -95,17 +95,9 @@ class StreamSession(
                     }
                 }
 
-                val q = StreamPrefs.quality
-                val profile = if (StreamPrefs.bitrateMbps > 0) {
-                    val (w, h) = when (q.res) {
-                        VideoResolutionPreset.RES_540P -> 960 to 540
-                        VideoResolutionPreset.RES_1080P -> 1920 to 1080
-                        else -> 1280 to 720
-                    }
-                    ConnectVideoProfile(w, h, q.fps.value, StreamPrefs.bitrateMbps * 1000, q.codec)
-                } else {
-                    ConnectVideoProfile.preset(q.res, q.fps, q.codec)
-                }
+                val r = StreamPrefs.res
+                val kbps = if (StreamPrefs.bitrateMbps > 0) StreamPrefs.bitrateMbps * 1000 else r.autoKbps
+                val profile = ConnectVideoProfile(r.w, r.h, StreamPrefs.fps.v, kbps, StreamPrefs.codec)
                 val info = ConnectInfo(console.ps5, console.host, console.registKey, console.morning, profile)
                 val s = Session(info, null, false)
                 // chiaki fires events on a native thread. Marshal to the main thread so UI

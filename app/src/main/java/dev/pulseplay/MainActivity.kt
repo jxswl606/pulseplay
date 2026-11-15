@@ -81,9 +81,11 @@ import dev.pulseplay.stream.AwayManager
 import dev.pulseplay.stream.ConsoleStore
 import dev.pulseplay.stream.Discovery
 import dev.pulseplay.stream.GamepadOverlay
-import dev.pulseplay.stream.QualityPreset
 import dev.pulseplay.stream.Registration
 import dev.pulseplay.stream.StreamPrefs
+import dev.pulseplay.stream.Res
+import dev.pulseplay.stream.Fps
+import dev.pulseplay.stream.Preset
 import dev.pulseplay.stream.StreamSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -366,7 +368,7 @@ private fun HomeContent(onStream: (String?) -> Unit) {
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Streaming Quality", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(StreamPrefs.quality.summary, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+                    Text(StreamPrefs.summary(), color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
                 }
                 Text("›", color = Muted, fontSize = 18.sp)
             }
@@ -522,35 +524,95 @@ private fun LibraryContent(onStream: (String?) -> Unit) {
 
 @Composable
 private fun SettingsContent(onForget: () -> Unit = {}) {
-    var quality by remember { mutableStateOf(StreamPrefs.quality) }
-    var bitrate by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
+    val console = ConsoleStore.console
+    var presetSel by remember { mutableStateOf(StreamPrefs.currentPreset()) }
+    var resSel by remember { mutableStateOf(StreamPrefs.res) }
+    var fpsSel by remember { mutableStateOf(StreamPrefs.fps) }
+    var bw by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
     var opacity by remember { mutableStateOf(StreamPrefs.opacityLabel()) }
+    fun sync() { presetSel = StreamPrefs.currentPreset(); resSel = StreamPrefs.res; fpsSel = StreamPrefs.fps; bw = StreamPrefs.bitrateLabel() }
+
+    val cardMod = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-        Text("Tune how PulsePlay streams from your PS5.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 18.dp))
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
-            SettingRow("Video quality", quality.summary, onClick = {
-                quality = QualityPreset.values()[(quality.ordinal + 1) % QualityPreset.values().size]
-                StreamPrefs.set(quality)
-            })
-            SettingRow("Bandwidth limit", bitrate, onClick = { StreamPrefs.cycleBitrate(); bitrate = StreamPrefs.bitrateLabel() })
+        Text("Tune how PulsePlay streams from your PS5.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+
+        GroupLabel("STREAMING")
+        Column(cardMod) {
+            SegmentedRow("Preset", listOf("Performance", "Balanced", "Quality"),
+                when (presetSel) { Preset.PERFORMANCE -> 0; Preset.BALANCED -> 1; Preset.QUALITY -> 2; else -> -1 }) { i ->
+                StreamPrefs.applyPreset(listOf(Preset.PERFORMANCE, Preset.BALANCED, Preset.QUALITY)[i]); sync()
+            }
+            SegmentedRow("Resolution", Res.values().map { it.label }, Res.values().indexOf(resSel)) { i -> StreamPrefs.setRes(Res.values()[i]); sync() }
+            SegmentedRow("Frame rate", Fps.values().map { it.label }, Fps.values().indexOf(fpsSel)) { i -> StreamPrefs.setFps(Fps.values()[i]); sync() }
+            StepperRow("Bandwidth", bw, onMinus = { StreamPrefs.stepBitrate(false); sync() }, onPlus = { StreamPrefs.stepBitrate(true); sync() })
+        }
+
+        GroupLabel("CONTROLS")
+        Column(cardMod) {
             SettingRow("Controller & touch", controls, onClick = { StreamPrefs.toggleControls(); controls = StreamPrefs.controlsLabel() })
             SettingRow("On-screen controls opacity", opacity, onClick = { StreamPrefs.cycleOpacity(); opacity = StreamPrefs.opacityLabel() })
+        }
+
+        GroupLabel("GENERAL")
+        Column(cardMod) {
             SettingRow("Audio", "On")
             SettingRow("Microphone", "Coming soon", soon = true)
             AwaySetting()
         }
-        Spacer(Modifier.height(16.dp))
-        TextButton(onClick = {
-            runCatching {
-                AwayManager.disconnect()      // stop any tunnel node before dropping keys
-                ConsoleStore.forget()
-                ConsoleStore.forgetLink()
-            }
-            onForget()                        // return to the home screen
-        }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
+
+        // Only offer "Forget" when a console is actually paired.
+        if (console != null) {
+            Spacer(Modifier.height(18.dp))
+            TextButton(onClick = {
+                runCatching { AwayManager.disconnect(); ConsoleStore.forget(); ConsoleStore.forgetLink() }
+                onForget()
+            }) { Text("Forget this PS5", color = Color(0xFFF85149), fontSize = 14.sp) }
+        }
     }
+}
+
+@Composable
+private fun GroupLabel(text: String) {
+    Text(text, color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 4.dp, top = 18.dp, bottom = 10.dp))
+}
+
+/** A horizontal segmented picker — tap any option directly (moves both ways). */
+@Composable
+private fun SegmentedRow(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp)) {
+        Text(label, color = OnDark, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 9.dp))
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            options.forEachIndexed { i, opt ->
+                Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                    .background(if (i == selected) Accent else Color.Transparent)
+                    .clickable { onSelect(i) }.padding(vertical = 9.dp), contentAlignment = Alignment.Center) {
+                    Text(opt, color = if (i == selected) Color.White else Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+/** A −/value/+ stepper for bandwidth (decrease left, increase right). */
+@Composable
+private fun StepperRow(label: String, value: String, onMinus: () -> Unit, onPlus: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.weight(1f))
+        StepBtn("−", onMinus)
+        Text(value, color = OnDark, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(84.dp))
+        StepBtn("+", onPlus)
+    }
+}
+
+@Composable
+private fun StepBtn(label: String, onClick: () -> Unit) {
+    Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Color(0x1FFFFFFF)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) { Text(label, color = Accent, fontSize = 19.sp, fontWeight = FontWeight.Bold) }
 }
 
 /** "Play away from home": set up once on home Wi-Fi, then the Play button works anywhere. */
@@ -765,7 +827,7 @@ private fun StreamScreen(onExit: () -> Unit) {
                     Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (status == "Connected") Good else Muted))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (status == "Connected") "Connected · ${StreamPrefs.quality.summary}" else status,
+                        if (status == "Connected") "Connected · ${StreamPrefs.summary()}" else status,
                         color = Color(0xCCFFFFFF), fontSize = 12.sp,
                     )
                 }
