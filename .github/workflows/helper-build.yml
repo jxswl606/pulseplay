@@ -1,0 +1,35 @@
+name: Build PS5 helper
+
+on:
+  push:
+    paths:
+      - 'helper/**'
+      - '.github/workflows/helper-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-15 lld-15 build-essential
+
+      - name: Install PS5 payload SDK
+        run: |
+          wget -q https://github.com/ps5-payload-dev/pacbrew-repo/releases/latest/download/ps5-payload-dev.tar.gz
+          sudo tar xf ps5-payload-dev.tar.gz -C /
+
+      - name: Build helper
+        run: PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk make -C helper
+
+      - name: Upload payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulseplay-helper
+          path: helper/pulseplay-helper.elf
+          if-no-files-found: error
