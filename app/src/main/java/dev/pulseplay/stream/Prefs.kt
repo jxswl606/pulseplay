@@ -51,8 +51,10 @@ object StreamPrefs {
         Preset.CUSTOM -> {}
     }
 
-    fun setRes(r: Res) { res = r; persist() }
-    fun setFps(f: Fps) { fps = f; persist() }
+    // Named apply* (not setRes/setFps): a `var res` already generates a setRes(Res)
+    // JVM method, so a fun setRes(Res) would be a platform declaration clash.
+    fun applyRes(r: Res) { res = r; persist() }
+    fun applyFps(f: Fps) { fps = f; persist() }
     fun setBitrate(mbps: Int) { bitrateMbps = mbps; persist() }
     /** Step bandwidth up/down through bitrateSteps (both directions). */
     fun stepBitrate(up: Boolean) {

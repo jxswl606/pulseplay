@@ -565,8 +565,8 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
                 when (presetSel) { Preset.PERFORMANCE -> 0; Preset.BALANCED -> 1; Preset.QUALITY -> 2; else -> -1 }) { i ->
                 StreamPrefs.applyPreset(listOf(Preset.PERFORMANCE, Preset.BALANCED, Preset.QUALITY)[i]); sync()
             }
-            SegmentedRow("Resolution", Res.values().map { it.label }, Res.values().indexOf(resSel)) { i -> StreamPrefs.setRes(Res.values()[i]); sync() }
-            SegmentedRow("Frame rate", Fps.values().map { it.label }, Fps.values().indexOf(fpsSel)) { i -> StreamPrefs.setFps(Fps.values()[i]); sync() }
+            SegmentedRow("Resolution", Res.values().map { it.label }, Res.values().indexOf(resSel)) { i -> StreamPrefs.applyRes(Res.values()[i]); sync() }
+            SegmentedRow("Frame rate", Fps.values().map { it.label }, Fps.values().indexOf(fpsSel)) { i -> StreamPrefs.applyFps(Fps.values()[i]); sync() }
             StepperRow("Bandwidth", bw, onMinus = { StreamPrefs.stepBitrate(false); sync() }, onPlus = { StreamPrefs.stepBitrate(true); sync() })
         }
 
