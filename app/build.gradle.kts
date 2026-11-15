@@ -19,8 +19,11 @@ android {
         versionCode = 3
         versionName = "0.1.0-m3"
 
-        // Build only arm64 for now (what real handhelds/phones use) to keep CI fast.
-        ndk { abiFilters += "arm64-v8a" }
+        // Ship all common phone ABIs so one APK installs on any device:
+        //   arm64-v8a    — modern 64-bit phones (almost everything since ~2018)
+        //   armeabi-v7a  — older / budget 32-bit ARM phones
+        //   x86_64       — emulators and ChromeOS / Intel tablets
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
 
         // Flags passed to chiaki-ng's root CMake: build only the lib + Android JNI,
         // nothing desktop. Mirrors chiaki-ng/android/app/build.gradle.

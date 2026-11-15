@@ -38,21 +38,23 @@ object StreamPrefs {
     fun opacityLabel() = "${(overlayAlpha * 100).toInt()}%"
 
     /** The preset matching the current settings, or CUSTOM.
-     *  Ladder — all 60fps so input stays responsive; they differ by resolution/codec/bitrate:
-     *   Performance 720p · H264 · 10 Mbps  (lowest latency, least data — best for mobile/away)
-     *   Balanced   1080p · H265 · 15 Mbps  (sharper, still smooth — good home-Wi-Fi default)
-     *   Quality    1080p · H265 · 25 Mbps  (max sharpness for fast LAN) */
+     *  Ladder — all 60fps for responsive input; tuned per goal:
+     *   Performance 720p  · H264 · 10 Mbps  (mobile/away: H264 = fast decode, light bandwidth)
+     *   Balanced    1080p · H264 · 20 Mbps  (home daily: keeps H264's low-latency smoothness,
+     *                                        extra bitrate keeps 1080p clean — the sweet spot)
+     *   Quality     1080p · H265 · 30 Mbps  (fast LAN: H265 is more efficient, so the high
+     *                                        bitrate buys maximum detail) */
     fun currentPreset(): Preset = when {
         res == Res.R720 && fps == Fps.F60 && codec == Codec.CODEC_H264 && bitrateMbps == 10 -> Preset.PERFORMANCE
-        res == Res.R1080 && fps == Fps.F60 && codec == Codec.CODEC_H265 && bitrateMbps == 15 -> Preset.BALANCED
-        res == Res.R1080 && fps == Fps.F60 && codec == Codec.CODEC_H265 && bitrateMbps == 25 -> Preset.QUALITY
+        res == Res.R1080 && fps == Fps.F60 && codec == Codec.CODEC_H264 && bitrateMbps == 20 -> Preset.BALANCED
+        res == Res.R1080 && fps == Fps.F60 && codec == Codec.CODEC_H265 && bitrateMbps == 30 -> Preset.QUALITY
         else -> Preset.CUSTOM
     }
 
     fun applyPreset(p: Preset) = when (p) {
         Preset.PERFORMANCE -> setAll(Res.R720, Fps.F60, Codec.CODEC_H264, 10)
-        Preset.BALANCED -> setAll(Res.R1080, Fps.F60, Codec.CODEC_H265, 15)
-        Preset.QUALITY -> setAll(Res.R1080, Fps.F60, Codec.CODEC_H265, 25)
+        Preset.BALANCED -> setAll(Res.R1080, Fps.F60, Codec.CODEC_H264, 20)
+        Preset.QUALITY -> setAll(Res.R1080, Fps.F60, Codec.CODEC_H265, 30)
         Preset.CUSTOM -> {}
     }
 
