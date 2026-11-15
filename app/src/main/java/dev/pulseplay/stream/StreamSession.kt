@@ -159,15 +159,16 @@ class StreamSession(
         session = null
         val route = active
         val wasAway = away
-        // Native teardown runs synchronously on the caller's (main) thread — the same
-        // order and thread as chiaki-ng's own shutdown(). Detach the surface, stop the
-        // session (this joins its threads), then dispose. Tearing the native decoder down
-        // off-thread is a classic crash, so we don't. Throwable also catches linker errors.
+        // Main thread, both instant: detach the surface, then signal stop. sessionStop
+        // only sets a flag — it does not block.
         try { s?.setSurface(null) } catch (_: Throwable) {}
         try { s?.stop() } catch (_: Throwable) {}
-        try { s?.dispose() } catch (_: Throwable) {}
-        // Only the network cleanup (lease release, tunnel) goes to the background.
+        // dispose() calls sessionJoin, which BLOCKS until the stream threads end — on a
+        // dead/slow tunnel that can take seconds. Running it on the main thread froze the
+        // UI into an ANR ("hangs then crashes"), so it must go to the background. The
+        // surface is already detached and events are main-thread + guarded, so this is safe.
         scope.launch {
+            try { s?.dispose() } catch (_: Throwable) {}
             if (p != null) try { HelperClient.sessionEnd(route.host, route.token, p) } catch (_: Exception) {}
             if (wasAway) AwayManager.disconnect()     // bring down the tunnel
         }.invokeOnCompletion { scope.cancel() }
