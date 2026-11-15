@@ -19,6 +19,10 @@ enum class Fps(val label: String, val v: Int) { F30("30", 30), F60("60", 60) }
 
 enum class Preset(val label: String) { PERFORMANCE("Performance"), BALANCED("Balanced"), QUALITY("Quality"), CUSTOM("Custom") }
 
+/** How the video fills the screen. STRETCH = fill edge-to-edge (may distort a touch);
+ *  FIT = keep 16:9 with black bars. */
+enum class FillMode(val label: String) { STRETCH("Stretch"), FIT("Fit") }
+
 object StreamPrefs {
     // Defaults = the Performance preset: smooth and low-latency on any network out of the box.
     @Volatile var res: Res = Res.R720
@@ -27,6 +31,8 @@ object StreamPrefs {
     @Volatile var bitrateMbps: Int = 10          // 0 = Auto (per-resolution default)
     @Volatile var alwaysShowControls: Boolean = false
     @Volatile var overlayAlpha: Float = 0.85f
+    @Volatile var fillMode: FillMode = FillMode.STRETCH     // default: fill the whole screen
+    fun setFillMode(m: FillMode) { fillMode = m; persist() }
     private var prefs: android.content.SharedPreferences? = null
 
     val bitrateSteps = listOf(0, 5, 8, 10, 12, 15, 20, 25, 30, 40)     // 0 = Auto (Mbps)
@@ -87,12 +93,14 @@ object StreamPrefs {
         bitrateMbps = p.getInt("bitrate", 10)
         alwaysShowControls = p.getBoolean("alwaysControls", false)
         overlayAlpha = p.getFloat("overlayAlpha", 0.85f)
+        fillMode = runCatching { FillMode.valueOf(p.getString("fill", null) ?: "STRETCH") }.getOrDefault(FillMode.STRETCH)
     }
 
     private fun persist() {
         prefs?.edit()?.apply {
             putString("res", res.name); putString("fps", fps.name); putString("codec", codec.name)
             putInt("bitrate", bitrateMbps); putBoolean("alwaysControls", alwaysShowControls); putFloat("overlayAlpha", overlayAlpha)
+            putString("fill", fillMode.name)
             apply()
         }
     }

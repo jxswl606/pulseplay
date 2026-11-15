@@ -87,6 +87,7 @@ import dev.pulseplay.stream.StreamPrefs
 import dev.pulseplay.stream.Res
 import dev.pulseplay.stream.Fps
 import dev.pulseplay.stream.Preset
+import dev.pulseplay.stream.FillMode
 import dev.pulseplay.stream.StreamSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -420,6 +421,7 @@ private fun Ps5Art(modifier: Modifier) {
 @Composable
 private fun ConsolesContent(onStream: (String?) -> Unit, onPair: () -> Unit) {
     val console = ConsoleStore.console
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val offline = dev.pulseplay.net.NetworkMonitor.offline()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("Consoles", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
@@ -436,6 +438,12 @@ private fun ConsolesContent(onStream: (String?) -> Unit, onPair: () -> Unit) {
                         Text(if (offline) "Not connected" else "${console.host} · Online", color = Muted, fontSize = 12.sp)
                     }
                 }
+                Button(onClick = {
+                    Discovery.wake(console)
+                    android.widget.Toast.makeText(ctx, "Wake signal sent to your PS5", android.widget.Toast.LENGTH_SHORT).show()
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0x22FFFFFF)),
+                    shape = RoundedCornerShape(12.dp), modifier = Modifier.height(44.dp)) { Text("Wake", color = OnDark) }
+                Spacer(Modifier.width(8.dp))
                 Button(onClick = { onStream(null) }, colors = ButtonDefaults.buttonColors(containerColor = Accent),
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.height(44.dp)) { Text("Play", color = Color.White, fontWeight = FontWeight.SemiBold) }
             }
@@ -553,6 +561,7 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
     var bw by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
     var opacity by remember { mutableStateOf(StreamPrefs.opacityLabel()) }
+    var fillSel by remember { mutableStateOf(StreamPrefs.fillMode) }
     val scope = rememberCoroutineScope()
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<NetworkTest.Result?>(null) }
@@ -572,6 +581,9 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
             SegmentedRow("Resolution", Res.values().map { it.label }, Res.values().indexOf(resSel)) { i -> StreamPrefs.applyRes(Res.values()[i]); sync() }
             SegmentedRow("Frame rate", Fps.values().map { it.label }, Fps.values().indexOf(fpsSel)) { i -> StreamPrefs.applyFps(Fps.values()[i]); sync() }
             StepperRow("Bandwidth", bw, onMinus = { StreamPrefs.stepBitrate(false); sync() }, onPlus = { StreamPrefs.stepBitrate(true); sync() })
+            SegmentedRow("Display", FillMode.values().map { it.label }, FillMode.values().indexOf(fillSel)) { i ->
+                StreamPrefs.setFillMode(FillMode.values()[i]); fillSel = FillMode.values()[i]
+            }
         }
 
         GroupLabel("NETWORK")
@@ -868,9 +880,9 @@ private fun StreamScreen(onExit: () -> Unit) {
             prevOrientation?.let { activity.requestedOrientation = it }
         }
     }
+    // Stretch to fill the whole screen (default) or keep 16:9 with black bars.
+    val videoMod = if (StreamPrefs.fillMode == FillMode.FIT) Modifier.aspectRatio(16f / 9f) else Modifier.fillMaxSize()
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        // Keep the game's 16:9 aspect ratio, centered with black bars, instead of
-        // stretching it to the phone's taller/wider screen. Overlays below stay full-screen.
         AndroidView(factory = { ctx ->
             SurfaceView(ctx).apply {
                 holder.addCallback(object : SurfaceHolder.Callback {
@@ -881,7 +893,7 @@ private fun StreamScreen(onExit: () -> Unit) {
                     override fun surfaceDestroyed(h: SurfaceHolder) { session.setSurface(null) }
                 })
             }
-        }, modifier = Modifier.aspectRatio(16f / 9f))
+        }, modifier = videoMod)
 
         // On-screen controls, hidden live once a physical controller is in use (unless forced on).
         if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
