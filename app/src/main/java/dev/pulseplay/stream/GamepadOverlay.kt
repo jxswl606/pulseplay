@@ -72,12 +72,13 @@ private val RightTrap = GenericShape { s, _ ->
 @Composable
 fun GamepadOverlay() {
     Box(Modifier.fillMaxSize().alpha(StreamPrefs.overlayAlpha).padding(horizontal = 18.dp, vertical = 14.dp)) {
-        // Shoulders / triggers stacked vertically on each side.
-        Column(Modifier.align(Alignment.TopStart), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Shoulders / triggers stacked vertically on each side, pushed down so they
+        // clear the top status bar instead of overlapping it.
+        Column(Modifier.align(Alignment.TopStart).padding(top = 58.dp), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Trapezoid("L2", LeftTrap) { d -> ActiveStream.trigger(true, if (d) 1f else 0f) }
             Trapezoid("L1", LeftTrap) { d -> ActiveStream.button(ControllerState.BUTTON_L1, d) }
         }
-        Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.align(Alignment.TopEnd).padding(top = 58.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Trapezoid("R2", RightTrap) { d -> ActiveStream.trigger(false, if (d) 1f else 0f) }
             Trapezoid("R1", RightTrap) { d -> ActiveStream.button(ControllerState.BUTTON_R1, d) }
         }

@@ -680,6 +680,9 @@ private fun StreamScreen(onExit: () -> Unit) {
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val session = remember { StreamSession(appCtx, console, { status = it }, { reason -> status = reason; quit = true }) }
     var menuOpen by remember { mutableStateOf(false) }
+    var topBarVisible by remember { mutableStateOf(true) }
+    // Hide the top bar a few seconds after the stream connects, so it stops covering the game.
+    LaunchedEffect(status) { if (status == "Connected") { topBarVisible = true; delay(4500); topBarVisible = false } }
     // When the stream ends (or drops), show the reason briefly then return Home — no hang.
     LaunchedEffect(quit) { if (quit) { delay(900); onExit() } }
     // Back gesture opens the in-stream menu instead of killing the session outright.
@@ -729,7 +732,8 @@ private fun StreamScreen(onExit: () -> Unit) {
         }
 
         // Top status bar (Remote Play style): back + PS + status; settings on the right.
-        Row(
+        // Auto-hides a few seconds after connecting; reappears while the menu is open.
+        if (topBarVisible || menuOpen) Row(
             Modifier.align(Alignment.TopStart).fillMaxWidth().alpha(StreamPrefs.overlayAlpha)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
