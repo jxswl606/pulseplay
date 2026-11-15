@@ -36,7 +36,10 @@ object ActiveStream {
         push()
     }
 
-    fun clear() { session = null }
+    // Reset the pad flag too: ActiveStream is a singleton, so without this a physical
+    // controller used once would keep the on-screen pad hidden for every later session,
+    // even with no controller attached. Each stream re-detects on the next pad event.
+    fun clear() { session = null; hasGamepad = false }
 
     // ---------- physical controller ----------
     private fun keyMask(keyCode: Int): UInt? = when (keyCode) {

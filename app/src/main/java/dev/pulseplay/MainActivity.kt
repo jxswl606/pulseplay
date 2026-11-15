@@ -132,10 +132,13 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(screenBg())) {
                     when (screen) {
                         Screen.SPLASH -> SplashScreen(onDone = { screen = Screen.HOME })
-                        Screen.HOME -> HomeScreen(onStream = { gid ->
-                            ActiveStream.pendingGameId = gid
-                            screen = if (ConsoleStore.console != null) Screen.STREAM else Screen.PAIR
-                        })
+                        Screen.HOME -> HomeScreen(
+                            onStream = { gid ->
+                                ActiveStream.pendingGameId = gid
+                                screen = if (ConsoleStore.console != null) Screen.STREAM else Screen.PAIR
+                            },
+                            onPair = { screen = Screen.PAIR },   // reach pairing even when a console exists
+                        )
                         Screen.PAIR -> PairScreen(
                             onBack = { screen = Screen.HOME },
                             onPaired = { screen = Screen.STREAM },   // registered → stream right away
@@ -221,14 +224,14 @@ private fun SplashScreen(onDone: () -> Unit) {
 }
 
 @Composable
-private fun HomeScreen(onStream: (String?) -> Unit) {
+private fun HomeScreen(onStream: (String?) -> Unit, onPair: () -> Unit) {
     var tab by remember { mutableStateOf(Tab.HOME) }
     Row(Modifier.fillMaxSize()) {
         Sidebar(tab) { tab = it }
         Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 30.dp, vertical = 26.dp)) {
             when (tab) {
-                Tab.HOME -> HomeContent(onStream)
-                Tab.CONSOLES -> ConsolesContent(onStream)
+                Tab.HOME -> HomeContent(onStream, navTo = { tab = it })
+                Tab.CONSOLES -> ConsolesContent(onStream, onPair)
                 Tab.LIBRARY -> LibraryContent(onStream)
                 Tab.CONTROLLER -> ControllerContent()
                 Tab.SETTINGS -> SettingsContent(onForget = { tab = Tab.HOME })
@@ -322,7 +325,7 @@ private fun NavIcon(tab: Tab, tint: Color) {
 }
 
 @Composable
-private fun HomeContent(onStream: (String?) -> Unit) {
+private fun HomeContent(onStream: (String?) -> Unit, navTo: (Tab) -> Unit) {
     val console = ConsoleStore.console
     val offline = dev.pulseplay.net.NetworkMonitor.offline()
     val netLabel = dev.pulseplay.net.NetworkMonitor.label()
@@ -347,7 +350,7 @@ private fun HomeContent(onStream: (String?) -> Unit) {
         Spacer(Modifier.height(16.dp))
         // Two info cards
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { navTo(Tab.CONSOLES) }.background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Ink).padding(8.dp)) { LogoMark(Modifier.fillMaxSize(), Accent) }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -361,7 +364,7 @@ private fun HomeContent(onStream: (String?) -> Unit) {
                 }
                 Text("›", color = Muted, fontSize = 18.sp)
             }
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { navTo(Tab.SETTINGS) }.background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Accent.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
                     Text("HD", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
@@ -398,7 +401,7 @@ private fun Ps5Art(modifier: Modifier) {
 }
 
 @Composable
-private fun ConsolesContent(onStream: (String?) -> Unit) {
+private fun ConsolesContent(onStream: (String?) -> Unit, onPair: () -> Unit) {
     val console = ConsoleStore.console
     val offline = dev.pulseplay.net.NetworkMonitor.offline()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -422,9 +425,11 @@ private fun ConsolesContent(onStream: (String?) -> Unit) {
             Spacer(Modifier.height(14.dp))
         }
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
-            SettingRow("Pair a new PS5", "", onClick = { onStream(null) })
+            // onPair → the pair screen directly. (onStream(null) would start a *stream*
+            // whenever a console was already paired, so it could never reach pairing.)
+            SettingRow("Pair a new PS5", "", onClick = onPair)
             SettingRow(if (console != null) "Forget this PS5" else "Nothing paired yet", "",
-                onClick = if (console != null) ({ ConsoleStore.forget(); ConsoleStore.forgetLink() }) else null)
+                onClick = if (console != null) ({ runCatching { AwayManager.disconnect(); ConsoleStore.forget(); ConsoleStore.forgetLink() } }) else null)
         }
     }
 }

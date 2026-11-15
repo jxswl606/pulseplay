@@ -5,6 +5,8 @@
  */
 package dev.pulseplay.stream
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.metallic.chiaki.lib.ChiakiLog
 import com.metallic.chiaki.lib.Regist
 import com.metallic.chiaki.lib.RegistEventCanceled
@@ -35,8 +37,11 @@ data class LinkConfig(val host: String, val key: String, val token: String)
 
 /** Holds the registered console and persists it so next launch is one tap. */
 object ConsoleStore {
-    @Volatile var console: RegisteredConsole? = null
-    @Volatile var link: LinkConfig? = null
+    // Compose-observable: screens read these directly, so pair/forget must trigger
+    // recomposition (a plain var left the UI stale — "Forget" looked like it did nothing).
+    // SnapshotMutableState is thread-safe, so writes from the IO pairing thread are fine.
+    var console: RegisteredConsole? by androidx.compose.runtime.mutableStateOf(null)
+    var link: LinkConfig? by androidx.compose.runtime.mutableStateOf(null)
     private var prefs: android.content.SharedPreferences? = null
 
     private fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
