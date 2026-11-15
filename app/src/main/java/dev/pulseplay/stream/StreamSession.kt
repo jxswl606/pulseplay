@@ -104,7 +104,11 @@ class StreamSession(
                 val kbps = if (StreamPrefs.bitrateMbps > 0) StreamPrefs.bitrateMbps * 1000 else r.autoKbps
                 // Fall back to H264 when the device has no HEVC decoder — otherwise H265
                 // presets would just show a black screen on older/budget phones.
-                val codec = if (StreamPrefs.codec == Codec.CODEC_H265 && !hevcSupported()) Codec.CODEC_H264 else StreamPrefs.codec
+                val fellBack = StreamPrefs.codec == Codec.CODEC_H265 && !hevcSupported()
+                if (fellBack) main.post {
+                    android.widget.Toast.makeText(context, "No H.265 decoder on this phone — streaming in H.264", android.widget.Toast.LENGTH_LONG).show()
+                }
+                val codec = if (fellBack) Codec.CODEC_H264 else StreamPrefs.codec
                 val profile = ConnectVideoProfile(r.w, r.h, StreamPrefs.fps.v, kbps, codec)
                 val info = ConnectInfo(console.ps5, console.host, console.registKey, console.morning, profile)
                 val s = Session(info, null, false)

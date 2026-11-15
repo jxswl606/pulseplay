@@ -8,11 +8,11 @@ import android.content.Context
 import com.metallic.chiaki.lib.Codec
 
 /** Stream resolutions. w/h are what we request; autoKbps is the default bitrate for "Auto". */
+// PS5 Remote Play tops out at 1080p, so 1080p is the ceiling (2K would just be clamped).
 enum class Res(val label: String, val w: Int, val h: Int, val autoKbps: Int) {
     R540("540p", 960, 540, 4000),
     R720("720p", 1280, 720, 10000),
     R1080("1080p", 1920, 1080, 15000),
-    R2K("2K", 2560, 1440, 25000),
 }
 
 enum class Fps(val label: String, val v: Int) { F30("30", 30), F60("60", 60) }

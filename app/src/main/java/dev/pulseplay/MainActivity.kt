@@ -857,6 +857,16 @@ private fun StreamScreen(onExit: () -> Unit) {
     LaunchedEffect(quit) { if (quit) { delay(900); onExit() } }
     // Back gesture opens the in-stream menu instead of killing the session outright.
     androidx.activity.compose.BackHandler { menuOpen = !menuOpen }
+    // End the stream when the app goes to the background — don't keep streaming (and
+    // burning battery/data) blind. Returning to the app starts a fresh connection.
+    DisposableEffect(Unit) {
+        val owner = activity as? androidx.lifecycle.LifecycleOwner
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) onExit()
+        }
+        owner?.lifecycle?.addObserver(obs)
+        onDispose { owner?.lifecycle?.removeObserver(obs) }
+    }
     DisposableEffect(Unit) {
         // Keep the screen awake and lock to landscape while streaming.
         activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
