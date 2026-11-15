@@ -35,6 +35,10 @@ class StreamSession(
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     // @Volatile: written on the IO connect thread, read on the main thread (input/surface).
     @Volatile private var session: Session? = null
+    // Gate for controller input: flipped off the instant the stream quits or is
+    // stopped, so input never hits a tearing-down native session on the main
+    // thread (which froze the UI into an ANR when a controller was active).
+    @Volatile private var live = false
     @Volatile private var leaseProof: String? = null
     @Volatile private var surface: Surface? = null
     // The console actually in use: the saved LAN console at home, or a loopback
@@ -107,6 +111,7 @@ class StreamSession(
                         if (stopped) return@post
                         when (ev) {
                             ConnectedEvent -> {
+                                live = true
                                 onStatus("Connected")
                                 // If the user tapped a specific game, boot it now the stream is live.
                                 val gid = ActiveStream.pendingGameId
@@ -116,7 +121,7 @@ class StreamSession(
                                     scope.launch { try { HelperClient.launch(console.host, console.token, gid, p) } catch (_: Exception) {} }
                                 }
                             }
-                            is QuitEvent -> onQuit(ev.reasonString ?: "Disconnected")
+                            is QuitEvent -> { live = false; onQuit(ev.reasonString ?: "Disconnected") }
                             is LoginPinRequestEvent -> onStatus("Login PIN required")
                             else -> {}
                         }
@@ -147,6 +152,7 @@ class StreamSession(
     }
 
     fun setControllerState(state: ControllerState) {
+        if (!live) return            // stream quit/stopped: don't touch the native session
         session?.setControllerState(state)
     }
 
@@ -155,6 +161,7 @@ class StreamSession(
     fun stop() {
         if (stopped) return
         stopped = true
+        live = false                 // block any in-flight controller input immediately
         val p = leaseProof
         leaseProof = null
         val s = session
