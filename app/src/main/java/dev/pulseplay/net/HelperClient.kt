@@ -1,6 +1,6 @@
 /*
  * PulsePlay — Remote Play for jailbroken PS5s (no PSN).
- * Copyright (C) 2026 PulsePlay contributors. Licensed AGPL-3.0-only.
+ * Copyright (C) 2026 Jxswl606. Licensed AGPL-3.0-only.
  *
  * Client for the PS5-side Orbit Play helper's control protocol.
  * Protocol verified from Orbit Play v0.8.0 (app/orbit_play/helper.py):

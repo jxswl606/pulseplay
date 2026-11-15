@@ -1,5 +1,7 @@
 # Credits and third-party notices
 
+**PulsePlay — created by Jxswl606.** Copyright (C) 2026 Jxswl606.
+
 PulsePlay is free, open-source software licensed under the **GNU Affero General
 Public License v3.0** (see `LICENSE`). It is **not for sale**. It streams from
 jailbroken PS5 consoles without PSN, and stands on the work of others.

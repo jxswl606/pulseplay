@@ -1,6 +1,6 @@
 /*
  * PulsePlay — free, open-source Remote Play for jailbroken PS5s (no PSN).
- * Copyright (C) 2026 PulsePlay contributors. Licensed AGPL-3.0-only.
+ * Copyright (C) 2026 Jxswl606. Licensed AGPL-3.0-only.
  */
 package dev.pulseplay
 
@@ -493,7 +493,9 @@ private fun AboutContent() {
             Spacer(Modifier.width(12.dp))
             Column { Text("PulsePlay", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text("v1.0.0 · AGPL-3.0", color = Muted, fontSize = 12.sp) }
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
+        Text("Made by Jxswl606", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(18.dp))
         Text("Free, open-source Remote Play for jailbroken PS5s — no PSN. Built on the work of:",
             color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 14.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
