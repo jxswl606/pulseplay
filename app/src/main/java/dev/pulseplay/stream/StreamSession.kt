@@ -39,6 +39,7 @@ class StreamSession(
     // stopped, so input never hits a tearing-down native session on the main
     // thread (which froze the UI into an ANR when a controller was active).
     @Volatile private var live = false
+    @Volatile private var connected = false
     @Volatile private var leaseProof: String? = null
     @Volatile private var surface: Surface? = null
     // The console actually in use: the saved LAN console at home, or a loopback
@@ -101,7 +102,10 @@ class StreamSession(
 
                 val r = StreamPrefs.res
                 val kbps = if (StreamPrefs.bitrateMbps > 0) StreamPrefs.bitrateMbps * 1000 else r.autoKbps
-                val profile = ConnectVideoProfile(r.w, r.h, StreamPrefs.fps.v, kbps, StreamPrefs.codec)
+                // Fall back to H264 when the device has no HEVC decoder — otherwise H265
+                // presets would just show a black screen on older/budget phones.
+                val codec = if (StreamPrefs.codec == Codec.CODEC_H265 && !hevcSupported()) Codec.CODEC_H264 else StreamPrefs.codec
+                val profile = ConnectVideoProfile(r.w, r.h, StreamPrefs.fps.v, kbps, codec)
                 val info = ConnectInfo(console.ps5, console.host, console.registKey, console.morning, profile)
                 val s = Session(info, null, false)
                 // chiaki fires events on a native thread. Marshal to the main thread so UI
@@ -112,6 +116,7 @@ class StreamSession(
                         when (ev) {
                             ConnectedEvent -> {
                                 live = true
+                                connected = true
                                 onStatus("Connected")
                                 // If the user tapped a specific game, boot it now the stream is live.
                                 val gid = ActiveStream.pendingGameId
@@ -140,11 +145,24 @@ class StreamSession(
                 surface?.let { s.setSurface(it) }
                 s.start()
                 onStatus("Connecting…")
+                // Connect watchdog: don't sit on "Connecting…" forever if the handshake
+                // never completes (wrong network, PS5 asleep) — report it so the UI can exit.
+                launch {
+                    delay(25_000)
+                    if (!connected && !stopped) { live = false; onQuit("Couldn't connect. Check the PS5 is on and on the network.") }
+                }
             } catch (e: Exception) {
                 onQuit(e.message ?: "Could not start the stream.")
             }
         }
     }
+
+    /** Does this device have a hardware/software HEVC (H.265) video decoder? */
+    private fun hevcSupported(): Boolean = try {
+        android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            !info.isEncoder && info.supportedTypes.any { it.equals("video/hevc", ignoreCase = true) }
+        }
+    } catch (_: Throwable) { false }
 
     fun setSurface(sfc: Surface?) {
         surface = sfc

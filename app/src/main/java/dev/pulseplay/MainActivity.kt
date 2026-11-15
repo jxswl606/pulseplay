@@ -868,7 +868,9 @@ private fun StreamScreen(onExit: () -> Unit) {
             prevOrientation?.let { activity.requestedOrientation = it }
         }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        // Keep the game's 16:9 aspect ratio, centered with black bars, instead of
+        // stretching it to the phone's taller/wider screen. Overlays below stay full-screen.
         AndroidView(factory = { ctx ->
             SurfaceView(ctx).apply {
                 holder.addCallback(object : SurfaceHolder.Callback {
@@ -879,7 +881,7 @@ private fun StreamScreen(onExit: () -> Unit) {
                     override fun surfaceDestroyed(h: SurfaceHolder) { session.setSurface(null) }
                 })
             }
-        }, modifier = Modifier.fillMaxSize())
+        }, modifier = Modifier.aspectRatio(16f / 9f))
 
         // On-screen controls, hidden live once a physical controller is in use (unless forced on).
         if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
