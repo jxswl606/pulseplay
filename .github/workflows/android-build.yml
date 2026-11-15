@@ -58,7 +58,7 @@ jobs:
           echo "Using Android NDK at: $NDK"
           test -d "$NDK" || { echo "::error::No Android NDK found on the runner"; exit 1; }
           export ANDROID_NDK_HOME="$NDK"
-          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 24 build --release -p link-node
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 28 build --release -p link-node
           # Copy the node binary into each ABI's jniLibs dir (named lib*.so so it's
           # extracted and executable). ABI -> Rust target triple:
           declare -A TRIPLE=( [arm64-v8a]=aarch64-linux-android [armeabi-v7a]=armv7-linux-androideabi [x86_64]=x86_64-linux-android )

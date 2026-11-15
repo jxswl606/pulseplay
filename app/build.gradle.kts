@@ -14,10 +14,8 @@ android {
 
     defaultConfig {
         applicationId = "dev.pulseplay"
-        // Android 7.0 reaches older phones. 24 is the floor for the code as written
-        // (ConnectivityManager.registerDefaultNetworkCallback). Very old devices may have
-        // weaker hardware video decode — drop to a lower preset there.
-        minSdk = 24
+        // Android 9.0 — a modern floor with reliable hardware video decode.
+        minSdk = 28
         targetSdk = 35
         versionCode = 3
         versionName = "0.1.0-m3"
