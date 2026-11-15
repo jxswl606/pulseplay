@@ -14,13 +14,16 @@ android {
 
     defaultConfig {
         applicationId = "dev.pulseplay"
-        minSdk = 26          // Android 8.0: floor for reliable MediaCodec hardware video decode.
+        // Android 7.0 reaches older phones. 24 is the floor for the code as written
+        // (ConnectivityManager.registerDefaultNetworkCallback). Very old devices may have
+        // weaker hardware video decode — drop to a lower preset there.
+        minSdk = 24
         targetSdk = 35
         versionCode = 3
         versionName = "0.1.0-m3"
 
-        // Ship all common phone ABIs so one APK installs on any device:
-        //   arm64-v8a    — modern 64-bit phones (almost everything since ~2018)
+        // Target all phones, old and new, from one APK:
+        //   arm64-v8a    — modern 64-bit phones (everything since ~2018)
         //   armeabi-v7a  — older / budget 32-bit ARM phones
         //   x86_64       — emulators and ChromeOS / Intel tablets
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
