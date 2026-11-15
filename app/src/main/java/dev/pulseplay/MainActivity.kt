@@ -115,6 +115,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         ConsoleStore.init(this)
         StreamPrefs.init(this)
+        dev.pulseplay.net.NetworkMonitor.init(this)
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = Colors) {
@@ -228,13 +229,26 @@ private fun Sidebar(tab: Tab, onSelect: (Tab) -> Unit) {
         NavItem("Library", tab == Tab.LIBRARY) { onSelect(Tab.LIBRARY) }
         NavItem("Settings", tab == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }
         Spacer(Modifier.weight(1f))
+        val paired = ConsoleStore.console != null
+        val offline = dev.pulseplay.net.NetworkMonitor.offline()
+        val netLabel = dev.pulseplay.net.NetworkMonitor.label()
+        val dotColor = when {
+            !paired -> Muted
+            offline -> Color(0xFFF85149)       // red when no connection
+            else -> Good
+        }
+        val statusText = when {
+            !paired -> "Not paired"
+            offline -> "Not connected"
+            else -> "Ready · $netLabel"
+        }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.03f)).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(9.dp).clip(RoundedCornerShape(5.dp)).background(if (ConsoleStore.console != null) Good else Muted))
+            Box(Modifier.size(9.dp).clip(RoundedCornerShape(5.dp)).background(dotColor))
             Spacer(Modifier.width(10.dp))
             Column {
                 Text("PlayStation 5", color = OnDark, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (ConsoleStore.console != null) "Ready · LAN" else "Not paired", color = Muted, fontSize = 11.sp)
+                Text(statusText, color = if (offline && paired) Color(0xFFF85149) else Muted, fontSize = 11.sp)
             }
         }
     }
@@ -263,9 +277,16 @@ private fun HomeContent(onStream: (String?) -> Unit) {
                 LogoMark(Modifier.fillMaxSize(), Accent)
             }
             Spacer(Modifier.width(14.dp))
+            val offline = dev.pulseplay.net.NetworkMonitor.offline()
+            val netLabel = dev.pulseplay.net.NetworkMonitor.label()
             Column(Modifier.weight(1f)) {
                 Text("PlayStation 5", color = OnDark, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (console != null) "${console.host} · Ready to stream" else "Tap Play to pair your PS5", color = Muted, fontSize = 12.sp)
+                val sub = when {
+                    console == null -> "Tap Play to pair your PS5"
+                    offline -> "Not connected"
+                    else -> "${console.host} · $netLabel"
+                }
+                Text(sub, color = if (console != null && offline) Color(0xFFF85149) else Muted, fontSize = 12.sp)
             }
             Button(onClick = { onStream(null) }, colors = ButtonDefaults.buttonColors(containerColor = Accent),
                 shape = RoundedCornerShape(14.dp), modifier = Modifier.height(54.dp).width(150.dp)) {
