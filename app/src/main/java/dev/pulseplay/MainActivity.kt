@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -321,6 +322,7 @@ private fun SettingsContent() {
     var quality by remember { mutableStateOf(StreamPrefs.quality) }
     var bitrate by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
+    var opacity by remember { mutableStateOf(StreamPrefs.opacityLabel()) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Text("Tune how PulsePlay streams from your PS5.", color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 18.dp))
@@ -331,6 +333,7 @@ private fun SettingsContent() {
             })
             SettingRow("Bandwidth limit", bitrate, onClick = { StreamPrefs.cycleBitrate(); bitrate = StreamPrefs.bitrateLabel() })
             SettingRow("Controller & touch", controls, onClick = { StreamPrefs.toggleControls(); controls = StreamPrefs.controlsLabel() })
+            SettingRow("On-screen controls opacity", opacity, onClick = { StreamPrefs.cycleOpacity(); opacity = StreamPrefs.opacityLabel() })
             SettingRow("Audio", "On")
             SettingRow("Microphone", "Coming soon", soon = true)
             AwaySetting()
@@ -526,15 +529,43 @@ private fun StreamScreen(onExit: () -> Unit) {
             Text(status, color = Color.White, fontSize = 15.sp, modifier = Modifier.align(Alignment.Center))
         }
 
-        // Discreet menu handle, top-center. Tap (or the back gesture) opens the menu.
-        Box(
-            Modifier.align(Alignment.TopCenter).padding(top = 6.dp).size(width = 46.dp, height = 22.dp)
-                .clip(RoundedCornerShape(11.dp)).background(Color(0x40000000)).clickable { menuOpen = true },
-            contentAlignment = Alignment.Center,
-        ) { Text("•••", color = Color(0xCCFFFFFF), fontSize = 13.sp) }
+        // Top status bar (Remote Play style): back + PS + status; settings on the right.
+        Row(
+            Modifier.align(Alignment.TopStart).fillMaxWidth().alpha(StreamPrefs.overlayAlpha)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StreamIcon("‹") { menuOpen = true }
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(50)).background(Color(0x40000000)), contentAlignment = Alignment.Center) {
+                Text("P", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text("PS5 Streaming", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (status == "Connected") Good else Muted))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (status == "Connected") "Connected · ${StreamPrefs.quality.summary}" else status,
+                        color = Color(0xCCFFFFFF), fontSize = 12.sp,
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            StreamIcon("⚙") { menuOpen = true }
+        }
 
         if (menuOpen) StreamMenu(status = status, onResume = { menuOpen = false }, onDisconnect = onExit)
     }
+}
+
+@Composable
+private fun StreamIcon(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(38.dp).clip(RoundedCornerShape(50)).background(Color(0x40000000)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = Color.White, fontSize = 18.sp) }
 }
 
 /** The in-stream menu (Remote Play style): a translucent overlay with status + Disconnect. */

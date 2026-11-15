@@ -24,11 +24,14 @@ object StreamPrefs {
     @Volatile var quality: QualityPreset = QualityPreset.BALANCED
     @Volatile var bitrateMbps: Int = 0          // 0 = Auto (preset default)
     @Volatile var alwaysShowControls: Boolean = false
+    @Volatile var overlayAlpha: Float = 0.85f   // on-screen controls opacity (0.3–1.0)
     private var prefs: android.content.SharedPreferences? = null
 
     val bitrateOptions = listOf(0, 10, 15, 20, 30)
+    val opacityOptions = listOf(0.4f, 0.55f, 0.7f, 0.85f, 1.0f)
     fun bitrateLabel() = if (bitrateMbps == 0) "Auto" else "$bitrateMbps Mbps"
     fun controlsLabel() = if (alwaysShowControls) "Always on-screen" else "Auto (hide with pad)"
+    fun opacityLabel() = "${(overlayAlpha * 100).toInt()}%"
 
     fun init(context: Context) {
         val p = context.applicationContext.getSharedPreferences("pulseplay", Context.MODE_PRIVATE)
@@ -37,6 +40,13 @@ object StreamPrefs {
             .getOrDefault(QualityPreset.BALANCED)
         bitrateMbps = p.getInt("bitrate", 0)
         alwaysShowControls = p.getBoolean("alwaysControls", false)
+        overlayAlpha = p.getFloat("overlayAlpha", 0.85f)
+    }
+
+    fun cycleOpacity() {
+        val i = opacityOptions.indexOfFirst { kotlin.math.abs(it - overlayAlpha) < 0.01f }.let { if (it < 0) 3 else it }
+        overlayAlpha = opacityOptions[(i + 1) % opacityOptions.size]
+        prefs?.edit()?.putFloat("overlayAlpha", overlayAlpha)?.apply()
     }
 
     fun set(q: QualityPreset) { quality = q; prefs?.edit()?.putString("quality", q.name)?.apply() }
