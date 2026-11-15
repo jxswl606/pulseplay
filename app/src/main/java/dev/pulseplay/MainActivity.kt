@@ -105,10 +105,16 @@ private val Colors = darkColorScheme(
     onBackground = OnDark, onSurface = OnDark,
 )
 
-private fun screenBg() = Brush.verticalGradient(listOf(Bg2, Bg1, Bg0))
+private val Ink = Color(0xFF05070C)          // OLED base
+private val Card = Color(0xFF0E131D)          // raised card
+private val Card2 = Color(0xFF131A27)
+private val Line = Color(0x14FFFFFF)
+private fun screenBg() = Brush.verticalGradient(listOf(Color(0xFF0A0E16), Ink))
 
 private enum class Screen { SPLASH, HOME, PAIR, STREAM }
-private enum class Tab { HOME, LIBRARY, SETTINGS }
+private enum class Tab(val label: String) {
+    HOME("Home"), CONSOLES("Consoles"), LIBRARY("Library"), CONTROLLER("Controller"), SETTINGS("Settings"), ABOUT("About")
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -202,11 +208,14 @@ private fun HomeScreen(onStream: (String?) -> Unit) {
     var tab by remember { mutableStateOf(Tab.HOME) }
     Row(Modifier.fillMaxSize()) {
         Sidebar(tab) { tab = it }
-        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 28.dp, vertical = 26.dp)) {
+        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 30.dp, vertical = 26.dp)) {
             when (tab) {
                 Tab.HOME -> HomeContent(onStream)
+                Tab.CONSOLES -> ConsolesContent(onStream)
                 Tab.LIBRARY -> LibraryContent(onStream)
+                Tab.CONTROLLER -> ControllerContent()
                 Tab.SETTINGS -> SettingsContent(onForget = { tab = Tab.HOME })
+                Tab.ABOUT -> AboutContent()
             }
         }
     }
@@ -214,8 +223,8 @@ private fun HomeScreen(onStream: (String?) -> Unit) {
 
 @Composable
 private fun Sidebar(tab: Tab, onSelect: (Tab) -> Unit) {
-    Column(Modifier.width(210.dp).fillMaxHeight().background(Color(0xFF0A0F1A).copy(alpha = 0.6f)).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp, bottom = 22.dp)) {
+    Column(Modifier.width(212.dp).fillMaxHeight().background(Ink).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp, top = 6.dp, bottom = 24.dp)) {
             Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(Accent, Color(0xFF0B4EA0)))).padding(6.dp)) {
                 LogoMark(Modifier.fillMaxSize(), Color.White)
             }
@@ -225,80 +234,238 @@ private fun Sidebar(tab: Tab, onSelect: (Tab) -> Unit) {
                 Text("Play", color = Accent, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        NavItem("Home", tab == Tab.HOME) { onSelect(Tab.HOME) }
-        NavItem("Library", tab == Tab.LIBRARY) { onSelect(Tab.LIBRARY) }
-        NavItem("Settings", tab == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }
+        Tab.values().forEach { t -> NavItem(t, t == tab) { onSelect(t) } }
         Spacer(Modifier.weight(1f))
-        val paired = ConsoleStore.console != null
-        val offline = dev.pulseplay.net.NetworkMonitor.offline()
-        val netLabel = dev.pulseplay.net.NetworkMonitor.label()
-        val dotColor = when {
-            !paired -> Muted
-            offline -> Color(0xFFF85149)       // red when no connection
-            else -> Good
-        }
-        val statusText = when {
-            !paired -> "Not paired"
-            offline -> "Not connected"
-            else -> "Ready · $netLabel"
-        }
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.03f)).padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(9.dp).clip(RoundedCornerShape(5.dp)).background(dotColor))
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text("PlayStation 5", color = OnDark, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(statusText, color = if (offline && paired) Color(0xFFF85149) else Muted, fontSize = 11.sp)
-            }
-        }
+        Text("v1.0.0", color = Color(0xFF3C4759), fontSize = 11.sp, modifier = Modifier.padding(start = 6.dp))
     }
 }
 
 @Composable
-private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(11.dp))
-        .background(if (selected) Accent.copy(alpha = 0.14f) else Color.Transparent)
-        .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+private fun NavItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+    val tint = if (selected) Color.White else Muted
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(12.dp))
+        .background(if (selected) Accent.copy(alpha = 0.16f) else Color.Transparent)
+        .clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = if (selected) Color.White else Muted, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        NavIcon(tab, tint)
+        Spacer(Modifier.width(13.dp))
+        Text(tab.label, color = tint, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Minimal line icons drawn on a Canvas so we need no icon dependency. */
+@Composable
+private fun NavIcon(tab: Tab, tint: Color) {
+    androidx.compose.foundation.Canvas(Modifier.size(19.dp)) {
+        val s = size.minDimension
+        val st = s * 0.11f
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = st, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+        when (tab) {
+            Tab.HOME -> {
+                val p = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(s * 0.5f, s * 0.12f); lineTo(s * 0.9f, s * 0.46f)
+                    lineTo(s * 0.9f, s * 0.9f); lineTo(s * 0.1f, s * 0.9f)
+                    lineTo(s * 0.1f, s * 0.46f); close()
+                }
+                drawPath(p, tint, style = stroke)
+            }
+            Tab.CONSOLES -> {
+                drawRoundRect(tint, topLeft = androidx.compose.ui.geometry.Offset(s * 0.12f, s * 0.2f),
+                    size = androidx.compose.ui.geometry.Size(s * 0.76f, s * 0.5f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.1f), style = stroke)
+                drawLine(tint, androidx.compose.ui.geometry.Offset(s * 0.35f, s * 0.86f), androidx.compose.ui.geometry.Offset(s * 0.65f, s * 0.86f), strokeWidth = st, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+            Tab.LIBRARY -> {
+                for (gx in 0..1) for (gy in 0..1) drawRoundRect(tint,
+                    topLeft = androidx.compose.ui.geometry.Offset(s * (0.14f + gx * 0.44f), s * (0.14f + gy * 0.44f)),
+                    size = androidx.compose.ui.geometry.Size(s * 0.3f, s * 0.3f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.06f), style = stroke)
+            }
+            Tab.CONTROLLER -> {
+                drawRoundRect(tint, topLeft = androidx.compose.ui.geometry.Offset(s * 0.08f, s * 0.3f),
+                    size = androidx.compose.ui.geometry.Size(s * 0.84f, s * 0.4f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.2f), style = stroke)
+                drawCircle(tint, s * 0.06f, androidx.compose.ui.geometry.Offset(s * 0.3f, s * 0.5f))
+                drawCircle(tint, s * 0.06f, androidx.compose.ui.geometry.Offset(s * 0.7f, s * 0.5f))
+            }
+            Tab.SETTINGS -> {
+                for (i in 0..2) {
+                    val y = s * (0.26f + i * 0.24f)
+                    drawLine(tint, androidx.compose.ui.geometry.Offset(s * 0.14f, y), androidx.compose.ui.geometry.Offset(s * 0.86f, y), strokeWidth = st, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    drawCircle(tint, s * 0.07f, androidx.compose.ui.geometry.Offset(s * (if (i == 1) 0.7f else 0.35f), y))
+                }
+            }
+            Tab.ABOUT -> {
+                drawCircle(tint, s * 0.4f, androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.5f), style = stroke)
+                drawCircle(tint, s * 0.05f, androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.3f))
+                drawLine(tint, androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.46f), androidx.compose.ui.geometry.Offset(s * 0.5f, s * 0.72f), strokeWidth = st, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
     }
 }
 
 @Composable
 private fun HomeContent(onStream: (String?) -> Unit) {
     val console = ConsoleStore.console
-    Column(Modifier.fillMaxSize()) {
-        Text("Home", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .background(Brush.horizontalGradient(listOf(Accent.copy(alpha = 0.16f), Panel.copy(alpha = 0.4f)))).padding(18.dp),
+    val offline = dev.pulseplay.net.NetworkMonitor.offline()
+    val netLabel = dev.pulseplay.net.NetworkMonitor.label()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        // Hero
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF0E1A2E), Ink))).padding(28.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(58.dp).clip(RoundedCornerShape(15.dp)).background(Bg0).padding(12.dp), contentAlignment = Alignment.Center) {
-                LogoMark(Modifier.fillMaxSize(), Accent)
-            }
-            Spacer(Modifier.width(14.dp))
-            val offline = dev.pulseplay.net.NetworkMonitor.offline()
-            val netLabel = dev.pulseplay.net.NetworkMonitor.label()
             Column(Modifier.weight(1f)) {
-                Text("PlayStation 5", color = OnDark, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                val sub = when {
-                    console == null -> "Tap Play to pair your PS5"
-                    offline -> "Not connected"
-                    else -> "${console.host} · $netLabel"
+                Text("PS5 Remote Play", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Text("Stream and play your PS5 anywhere.", color = Muted, fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 20.dp))
+                Button(onClick = { onStream(null) }, colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    shape = RoundedCornerShape(13.dp), modifier = Modifier.height(50.dp)) {
+                    Text("▶", color = Color.White, fontSize = 15.sp)
+                    Spacer(Modifier.width(9.dp))
+                    Text(if (console != null) "Connect to PS5" else "Pair your PS5", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Text(sub, color = if (console != null && offline) Color(0xFFF85149) else Muted, fontSize = 12.sp)
             }
-            Button(onClick = { onStream(null) }, colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.height(54.dp).width(150.dp)) {
-                Text(if (console != null) "Play" else "Pair", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Ps5Art(Modifier.size(width = 150.dp, height = 116.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+        // Two info cards
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Ink).padding(8.dp)) { LogoMark(Modifier.fillMaxSize(), Accent) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("My PS5", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (console == null) Muted else if (offline) Color(0xFFF85149) else Good))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (console == null) "Not paired" else if (offline) "Not connected" else netLabel,
+                            color = if (console != null && offline) Color(0xFFF85149) else Muted, fontSize = 12.sp)
+                    }
+                }
+                Text("›", color = Muted, fontSize = 18.sp)
+            }
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Accent.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                    Text("HD", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Streaming Quality", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(StreamPrefs.quality.summary, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+                }
+                Text("›", color = Muted, fontSize = 18.sp)
             }
         }
         Spacer(Modifier.height(24.dp))
-        Text("Continue playing", color = Color(0xFFCDD8EA), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text("Recently Played", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
         val covers = listOf(Color(0xFF6A1020), Color(0xFFB81E2E), Color(0xFF1F4F7D), Color(0xFF5A3A1F))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(covers) { c -> Box(Modifier.width(120.dp).height(156.dp).clip(RoundedCornerShape(13.dp)).background(Brush.verticalGradient(listOf(c, Bg0)))) }
+            items(covers) { c -> Box(Modifier.width(120.dp).height(150.dp).clip(RoundedCornerShape(13.dp)).background(Brush.verticalGradient(listOf(c, Ink)))) }
+        }
+    }
+}
+
+/** A stylized PS5 console (two white fins, dark body, a blue light). */
+@Composable
+private fun Ps5Art(modifier: Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(24.dp).height(104.dp).clip(RoundedCornerShape(6.dp)).background(Brush.verticalGradient(listOf(Color.White, Color(0xFFD7DEEA)))))
+            Box(Modifier.width(16.dp).height(104.dp).background(Color(0xFF090C12)), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(3.dp).height(72.dp).clip(RoundedCornerShape(2.dp)).background(Brush.verticalGradient(listOf(Accent, Color(0xFF66C0FF)))))
+            }
+            Box(Modifier.width(24.dp).height(104.dp).clip(RoundedCornerShape(6.dp)).background(Brush.verticalGradient(listOf(Color.White, Color(0xFFD7DEEA)))))
+        }
+    }
+}
+
+@Composable
+private fun ConsolesContent(onStream: (String?) -> Unit) {
+    val console = ConsoleStore.console
+    val offline = dev.pulseplay.net.NetworkMonitor.offline()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text("Consoles", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(18.dp))
+        if (console != null) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Card).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ps5Art(Modifier.size(width = 56.dp, height = 56.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("My PS5", color = OnDark, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (offline) Color(0xFFF85149) else Good))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (offline) "Not connected" else "${console.host} · Online", color = Muted, fontSize = 12.sp)
+                    }
+                }
+                Button(onClick = { onStream(null) }, colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    shape = RoundedCornerShape(12.dp), modifier = Modifier.height(44.dp)) { Text("Play", color = Color.White, fontWeight = FontWeight.SemiBold) }
+            }
+            Spacer(Modifier.height(14.dp))
+        }
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
+            SettingRow("Pair a new PS5", "", onClick = { onStream(null) })
+            SettingRow(if (console != null) "Forget this PS5" else "Nothing paired yet", "",
+                onClick = if (console != null) ({ ConsoleStore.forget(); ConsoleStore.forgetLink() }) else null)
+        }
+    }
+}
+
+@Composable
+private fun ControllerContent() {
+    var controls by remember { mutableStateOf(StreamPrefs.alwaysShowControls) }
+    var opacity by remember { mutableStateOf(StreamPrefs.opacityLabel()) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text("Controller", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(18.dp))
+        Text("ON-SCREEN CONTROLS", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
+            ToggleRow("Always show on-screen controls", controls) { StreamPrefs.toggleControls(); controls = StreamPrefs.alwaysShowControls }
+            SettingRow("On-screen controls opacity", opacity, onClick = { StreamPrefs.cycleOpacity(); opacity = StreamPrefs.opacityLabel() })
+            SettingRow("Edit layout", "Coming soon", soon = true)
+            SettingRow("Button mapping", "Coming soon", soon = true)
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("DUALSENSE", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
+            SettingRow("Vibration (Haptic)", "Coming soon", soon = true)
+            SettingRow("Adaptive Triggers", "Coming soon", soon = true)
+            SettingRow("Gyro aiming", "Coming soon", soon = true)
+        }
+    }
+}
+
+@Composable
+private fun AboutContent() {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text("About", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(18.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Accent, Color(0xFF0B4EA0)))).padding(9.dp)) { LogoMark(Modifier.fillMaxSize(), Color.White) }
+            Spacer(Modifier.width(12.dp))
+            Column { Text("PulsePlay", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text("v1.0.0 · AGPL-3.0", color = Muted, fontSize = 12.sp) }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Free, open-source Remote Play for jailbroken PS5s — no PSN. Built on the work of:",
+            color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 14.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.03f))) {
+            SettingRow("Orbit Play", "saawant12")
+            SettingRow("chiaki-ng", "streetpea")
+            SettingRow("Chiaki", "thestr4ng3r")
+            SettingRow("PS5 homebrew community", "")
+        }
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, on: Boolean, onToggle: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 18.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.size(width = 44.dp, height = 26.dp).clip(RoundedCornerShape(50)).background(if (on) Accent else Color(0x24FFFFFF)),
+            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.padding(3.dp).size(20.dp).clip(RoundedCornerShape(50)).background(Color.White))
         }
     }
 }
