@@ -21,19 +21,32 @@ object ActiveStream {
         set(v) { hasGamepadState.value = v }
     val state = ControllerState()
 
-    private fun push() { session?.setControllerState(state) }
+    @Volatile private var lastPushMs = 0L
+    // Coalesce high-frequency stick updates to ~60 Hz. The on-screen floating sticks fire
+    // on every touch-move (100+/s); pushing each one floods chiaki's reliable feedback
+    // channel, which showed up in logs as Takion send-buffer retransmits "giving up on
+    // packet" and could destabilise the stream. `immediate` bypasses the throttle for
+    // things that must never be dropped: button presses, and stick/trigger RELEASES (so a
+    // stick can never get stuck deflected because its final 0,0 was throttled away).
+    private fun push(immediate: Boolean) {
+        val now = System.currentTimeMillis()
+        if (immediate || now - lastPushMs >= 16) {
+            lastPushMs = now
+            session?.setControllerState(state)
+        }
+    }
     private fun axis(v: Float) = (v.coerceIn(-1f, 1f) * 32767).toInt().toShort()
 
     fun button(mask: UInt, down: Boolean) {
         state.buttons = if (down) state.buttons or mask else state.buttons and mask.inv()
-        push()
+        push(immediate = true)
     }
-    fun leftStick(x: Float, y: Float) { state.leftX = axis(x); state.leftY = axis(y); push() }
-    fun rightStick(x: Float, y: Float) { state.rightX = axis(x); state.rightY = axis(y); push() }
+    fun leftStick(x: Float, y: Float) { state.leftX = axis(x); state.leftY = axis(y); push(immediate = x == 0f && y == 0f) }
+    fun rightStick(x: Float, y: Float) { state.rightX = axis(x); state.rightY = axis(y); push(immediate = x == 0f && y == 0f) }
     fun trigger(left: Boolean, f: Float) {
         val v = (f.coerceIn(0f, 1f) * 255).toInt().toUByte()
         if (left) state.l2State = v else state.r2State = v
-        push()
+        push(immediate = true)
     }
 
     // Reset the pad flag too: ActiveStream is a singleton, so without this a physical
@@ -91,7 +104,7 @@ object ActiveStream {
         fun set(mask: UInt, on: Boolean) { state.buttons = if (on) state.buttons or mask else state.buttons and mask.inv() }
         set(ControllerState.BUTTON_DPAD_LEFT, hx < -0.5f); set(ControllerState.BUTTON_DPAD_RIGHT, hx > 0.5f)
         set(ControllerState.BUTTON_DPAD_UP, hy < -0.5f); set(ControllerState.BUTTON_DPAD_DOWN, hy > 0.5f)
-        push()
+        push(immediate = true)   // physical events are already frame-paced by Android
         return true
     }
 }
