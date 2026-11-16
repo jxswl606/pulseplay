@@ -942,15 +942,7 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
         // Live connection chip, top-left (dot + latency + network).
         StreamStatusChip(status, pingMs, Modifier.align(Alignment.TopStart).padding(14.dp))
 
-        // Pull-tab, top-center — always there so the bar is reachable even over the pad.
-        if (!barVisible) Box(
-            Modifier.align(Alignment.TopCenter)
-                .clip(RoundedCornerShape(bottomStart = 11.dp, bottomEnd = 11.dp))
-                .background(Color(0x66000000)).clickable { barVisible = true; poke++ }
-                .padding(horizontal = 18.dp, vertical = 3.dp),
-        ) { Text("⌄", color = Color(0xCCFFFFFF), fontSize = 15.sp) }
-
-        // Bottom control bar, slides in on reveal.
+        // Bottom control bar, slides in on reveal (tap anywhere on the video to show it).
         androidx.compose.animation.AnimatedVisibility(
             visible = barVisible,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
@@ -987,7 +979,7 @@ private fun StreamStatusChip(status: String, pingMs: Int, modifier: Modifier) {
         else -> Color(0xFFF0A05A)
     }
     Row(
-        modifier.clip(RoundedCornerShape(50)).background(Color(0x80000000)).padding(horizontal = 12.dp, vertical = 7.dp),
+        modifier.alpha(0.75f).clip(RoundedCornerShape(50)).background(Color(0x80000000)).padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(dot))
