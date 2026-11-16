@@ -733,54 +733,26 @@ private fun StepBtn(label: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center) { Text(label, color = Accent, fontSize = 19.sp, fontWeight = FontWeight.Bold) }
 }
 
-/** "Play away from home": set up once on home Wi-Fi, then the Play button works anywhere. */
+/**
+ * "Play away from home" via Tailscale. This build streams over any network as long as
+ * the PS5 is reachable by IP, so there's no in-app tunnel to configure: put the phone
+ * and the PS5's network on the same Tailscale tailnet, then pair/connect with the PS5's
+ * Tailscale IP exactly like at home. Tapping the row just explains how.
+ */
 @Composable
 private fun AwaySetting() {
-    val scope = rememberCoroutineScope()
-    val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    var configured by remember { mutableStateOf(AwayManager.configured) }
-    var busy by remember { mutableStateOf(false) }
-    var note by remember { mutableStateOf<String?>(null) }
-    var noteOk by remember { mutableStateOf(true) }
-
-    val value = when {
-        busy -> "Working…"
-        configured -> "On"
-        ConsoleStore.console == null -> "Pair first"
-        else -> "Set up"
-    }
+    var expanded by remember { mutableStateOf(false) }
     Column {
-        SettingRow("Play away from home", value, soon = busy, onClick = {
-            val console = ConsoleStore.console
-            when {
-                console == null -> { note = "Pair your PS5 on home Wi-Fi first."; noteOk = false }
-                configured -> {
-                    // Turn it off: ask the PS5 to leave (best effort), then drop the saved key.
-                    busy = true; note = null
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            runCatching { HelperClient.link("POST", console.host, console.token, action = "leave") }
-                        }
-                        ConsoleStore.forgetLink(); AwayManager.disconnect()
-                        configured = false; busy = false; note = "Play away from home is off."; noteOk = true
-                    }
-                }
-                else -> {
-                    busy = true; note = null
-                    scope.launch {
-                        try {
-                            AwayManager.setupAtHome(appCtx) { s -> note = s; noteOk = true }
-                            configured = true
-                        } catch (e: HelperError) { note = e.message; noteOk = false }
-                        catch (e: Exception) { note = e.message ?: "Setup failed."; noteOk = false }
-                        finally { busy = false }
-                    }
-                }
-            }
-        })
-        note?.let {
-            Text(it, color = if (noteOk) Good else Color(0xFFF85149), fontSize = 12.sp,
-                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp))
+        SettingRow("Play away from home", "Tailscale", onClick = { expanded = !expanded })
+        if (expanded) {
+            Text(
+                "Install Tailscale on this phone and expose your PS5's network to your tailnet " +
+                    "(a subnet route on a home device, or Tailscale on the console's router). " +
+                    "Then pair and connect using the PS5's Tailscale IP (100.x.y.z) — Remote Play " +
+                    "works anywhere, just like on your home Wi-Fi. Keep the PS5 on with the helper running.",
+                color = Muted, fontSize = 12.sp,
+                modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 14.dp),
+            )
         }
     }
 }

@@ -2,8 +2,8 @@
  * PulsePlay — Remote Play for jailbroken PS5s (no PSN).
  * Copyright (C) 2026 Jxswl606. Licensed AGPL-3.0-only.
  *
- * Client for the PS5-side Orbit Play helper's control protocol.
- * Protocol verified from Orbit Play v0.8.0 (app/orbit_play/helper.py):
+ * Client for PulsePlay's own PS5-side helper (helper/src), served on TCP 34179.
+ * The control protocol is interoperable with Orbit Play's helper so either can be used:
  *   - plain HTTP to TCP 34179, numeric private-LAN IPv4 only
  *   - headers: X-Orbit-Play-Client: 1, Authorization: Bearer <64-hex token>,
  *     X-Orbit-Play-Code: <6 digits>
@@ -24,7 +24,11 @@ object HelperClient {
     const val PORT = 34179
     private const val TIMEOUT_MS = 6000
 
-    /** True only for RFC-1918 private IPv4 — the helper refuses anything else. */
+    /**
+     * True for a private-LAN IPv4 (RFC-1918) OR a Tailscale address (100.64.0.0/10,
+     * CGNAT). Tailscale is how PulsePlay reaches the PS5 away from home, so its IPs
+     * must be accepted here too; anything else (public IPs, hostnames) is refused.
+     */
     fun isPrivateLanIpv4(value: String): Boolean {
         val addr = try {
             InetAddress.getByName(value.trim())
@@ -41,6 +45,7 @@ object HelperClient {
             10 -> true                       // 10.0.0.0/8
             172 -> o1 in 16..31              // 172.16.0.0/12
             192 -> o1 == 168                 // 192.168.0.0/16
+            100 -> o1 in 64..127             // 100.64.0.0/10 — Tailscale (CGNAT)
             else -> false
         }
     }
