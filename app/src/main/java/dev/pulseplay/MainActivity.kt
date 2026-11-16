@@ -848,6 +848,7 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val session = remember { StreamSession(appCtx, console, { status = it }, { reason -> status = reason; quit = true }) }
     var barVisible by remember { mutableStateOf(false) }
+    var padHidden by remember { mutableStateOf(false) }  // Controls button hides the on-screen pad
     var poke by remember { mutableStateOf(0) }           // bump to restart the auto-hide timer
     var pingMs by remember { mutableStateOf(-1) }
     // Live latency readout: ping the console every ~2s while connected (the engine
@@ -913,8 +914,9 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
             }
         }, modifier = videoMod)
 
-        // On-screen controls, hidden live once a physical controller is in use (unless forced on).
-        if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
+        // On-screen controls: shown unless the user hid them (Controls button), and
+        // auto-hidden once a physical controller is in use (unless forced always-on).
+        if (!padHidden && (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value)) GamepadOverlay()
 
         // Connection feedback, centered, only until the first frame arrives.
         if (status != "Connected") {
@@ -931,7 +933,7 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
         ) {
             StreamControlBar(
                 onQuality = { StreamPrefs.applyPreset(nextPreset(StreamPrefs.currentPreset())); onReconnect() },
-                onControls = { StreamPrefs.toggleControls(); poke++ },
+                onControls = { padHidden = !padHidden; poke++ },
                 onDisplay = {
                     StreamPrefs.applyFillMode(if (StreamPrefs.fillMode == FillMode.STRETCH) FillMode.FIT else FillMode.STRETCH)
                     poke++

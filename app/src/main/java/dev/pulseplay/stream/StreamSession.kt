@@ -190,15 +190,19 @@ class StreamSession(
         session = null
         val route = active
         val wasAway = away
-        // ALL native teardown runs on a background thread so stop() returns instantly and
-        // can never freeze the UI. setSurface(null)/stop() are quick but still native, and
-        // dispose() calls sessionJoin which BLOCKS until the stream threads end (seconds on
-        // a dead/slow tunnel) — that main-thread block was the "disconnect freezes and
-        // crashes" ANR. Input is already gated off (live=false) and the session reference is
-        // nulled, so nothing else touches `s`.
+        // Detach the surface and signal stop SYNCHRONOUSLY. Both are quick, non-blocking
+        // native calls (sessionSetSurface / sessionStop), and doing them now — before the
+        // composition destroys the SurfaceView — is what actually prevents the freeze:
+        //   • setSurface(null) releases the decoder from the Surface up front, so the
+        //     native decoder never renders into a surface Android has already torn down
+        //     (that out-from-under-the-decoder stall was the real "disconnect hangs").
+        //   • stop() sends the disconnect to the PS5 immediately, freeing its single
+        //     Remote Play slot, so a Quality-change reconnect doesn't race a live session.
+        try { s?.setSurface(null) } catch (_: Throwable) {}
+        try { s?.stop() } catch (_: Throwable) {}
+        // Only dispose() blocks: sessionJoin waits for the stream threads to end (seconds
+        // on a dead/slow tunnel). Background JUST that, so the UI never waits on it.
         scope.launch {
-            try { s?.setSurface(null) } catch (_: Throwable) {}
-            try { s?.stop() } catch (_: Throwable) {}
             try { s?.dispose() } catch (_: Throwable) {}
             if (p != null) try { HelperClient.sessionEnd(route.host, route.token, p) } catch (_: Exception) {}
             if (wasAway) AwayManager.disconnect()     // bring down the tunnel
