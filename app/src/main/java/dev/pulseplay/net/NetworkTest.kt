@@ -42,6 +42,9 @@ object NetworkTest {
         } catch (_: Exception) { -1L }
     }
 
+    /** One latency sample in ms to the helper port, or -1 if unreachable. Call off-main. */
+    fun pingOnce(host: String): Int = probe(host, 1200).let { if (it < 0) -1 else it.toInt() }
+
     suspend fun run(host: String): Result = withContext(Dispatchers.IO) {
         val n = 12
         val times = ArrayList<Long>(n)

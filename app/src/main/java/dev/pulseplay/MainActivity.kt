@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = Colors) {
                 var screen by remember { mutableStateOf(Screen.SPLASH) }
+                var streamKey by remember { mutableStateOf(0) }   // bump to reconnect the stream
                 Box(Modifier.fillMaxSize().background(screenBg())) {
                     when (screen) {
                         Screen.SPLASH -> SplashScreen(onDone = { screen = Screen.HOME })
@@ -145,7 +146,11 @@ class MainActivity : ComponentActivity() {
                             onBack = { screen = Screen.HOME },
                             onPaired = { screen = Screen.STREAM },   // registered → stream right away
                         )
-                        Screen.STREAM -> StreamScreen(onExit = { screen = Screen.HOME })
+                        // key(streamKey): bumping it fully recreates the stream (new session +
+                        // surface, correctly bound) — a clean reconnect when quality changes.
+                        Screen.STREAM -> androidx.compose.runtime.key(streamKey) {
+                            StreamScreen(onExit = { screen = Screen.HOME }, onReconnect = { streamKey++ })
+                        }
                     }
                 }
             }
@@ -845,7 +850,7 @@ private fun PairScreen(onBack: () -> Unit, onPaired: () -> Unit) {
 }
 
 @Composable
-private fun StreamScreen(onExit: () -> Unit) {
+private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
     val console = ConsoleStore.console
     if (console == null) { onExit(); return }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
@@ -853,14 +858,24 @@ private fun StreamScreen(onExit: () -> Unit) {
     var quit by remember { mutableStateOf(false) }
     val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     val session = remember { StreamSession(appCtx, console, { status = it }, { reason -> status = reason; quit = true }) }
-    var menuOpen by remember { mutableStateOf(false) }
-    var topBarVisible by remember { mutableStateOf(true) }
-    // Hide the top bar a few seconds after the stream connects, so it stops covering the game.
-    LaunchedEffect(status) { if (status == "Connected") { topBarVisible = true; delay(4500); topBarVisible = false } }
+    var barVisible by remember { mutableStateOf(false) }
+    var poke by remember { mutableStateOf(0) }           // bump to restart the auto-hide timer
+    var pingMs by remember { mutableStateOf(-1) }
+    // Live latency readout: ping the console every ~2s while connected (the engine
+    // exposes no FPS/bitrate, so latency is the honest live signal).
+    LaunchedEffect(status) {
+        if (status != "Connected") return@LaunchedEffect
+        while (true) {
+            pingMs = withContext(Dispatchers.IO) { NetworkTest.pingOnce(console.host) }
+            delay(2000)
+        }
+    }
+    // Auto-hide the control bar a few seconds after it's shown or last touched.
+    LaunchedEffect(barVisible, poke) { if (barVisible) { delay(4000); barVisible = false } }
     // When the stream ends (or drops), show the reason briefly then return Home — no hang.
     LaunchedEffect(quit) { if (quit) { delay(900); onExit() } }
-    // Back gesture opens the in-stream menu instead of killing the session outright.
-    androidx.activity.compose.BackHandler { menuOpen = !menuOpen }
+    // Back gesture toggles the control bar instead of killing the session outright.
+    androidx.activity.compose.BackHandler { barVisible = !barVisible }
     // End the stream when the app goes to the background — don't keep streaming (and
     // burning battery/data) blind. Returning to the app starts a fresh connection.
     DisposableEffect(Unit) {
@@ -909,76 +924,147 @@ private fun StreamScreen(onExit: () -> Unit) {
             }
         }, modifier = videoMod)
 
+        // Tap empty video to reveal the control bar. Drawn below the pad so the pad
+        // keeps its own touches; taps on empty areas fall through to here.
+        Box(Modifier.fillMaxSize().clickable(
+            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+            indication = null,
+        ) { barVisible = true; poke++ })
+
         // On-screen controls, hidden live once a physical controller is in use (unless forced on).
         if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
 
         // Connection feedback, centered, only until the first frame arrives.
-        if (!menuOpen && status != "Connected") {
+        if (status != "Connected") {
             Text(status, color = Color.White, fontSize = 15.sp, modifier = Modifier.align(Alignment.Center))
         }
 
-        // Top status bar (Remote Play style): back + PS + status; settings on the right.
-        // Auto-hides a few seconds after connecting; reappears while the menu is open.
-        if (topBarVisible || menuOpen) Row(
-            Modifier.align(Alignment.TopStart).fillMaxWidth().alpha(StreamPrefs.overlayAlpha)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StreamIcon("‹") { menuOpen = true }
-            Spacer(Modifier.width(10.dp))
-            Box(Modifier.size(34.dp).clip(RoundedCornerShape(50)).background(Color(0x40000000)), contentAlignment = Alignment.Center) {
-                Text("P", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text("PS5 Streaming", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (status == "Connected") Good else Muted))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        if (status == "Connected") "Connected · ${StreamPrefs.summary()}" else status,
-                        color = Color(0xCCFFFFFF), fontSize = 12.sp,
-                    )
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            StreamIcon("⚙") { menuOpen = true }
-        }
+        // Live connection chip, top-left (dot + latency + network).
+        StreamStatusChip(status, pingMs, Modifier.align(Alignment.TopStart).padding(14.dp))
 
-        if (menuOpen) StreamMenu(status = status, onResume = { menuOpen = false }, onDisconnect = onExit)
+        // Pull-tab, top-center — always there so the bar is reachable even over the pad.
+        if (!barVisible) Box(
+            Modifier.align(Alignment.TopCenter)
+                .clip(RoundedCornerShape(bottomStart = 11.dp, bottomEnd = 11.dp))
+                .background(Color(0x66000000)).clickable { barVisible = true; poke++ }
+                .padding(horizontal = 18.dp, vertical = 3.dp),
+        ) { Text("⌄", color = Color(0xCCFFFFFF), fontSize = 15.sp) }
+
+        // Bottom control bar, slides in on reveal.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = barVisible,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+        ) {
+            StreamControlBar(
+                onQuality = { StreamPrefs.applyPreset(nextPreset(StreamPrefs.currentPreset())); onReconnect() },
+                onControls = { StreamPrefs.toggleControls(); poke++ },
+                onDisplay = {
+                    StreamPrefs.setFillMode(if (StreamPrefs.fillMode == FillMode.STRETCH) FillMode.FIT else FillMode.STRETCH)
+                    poke++
+                },
+                onDisconnect = onExit,
+            )
+        }
     }
 }
 
-@Composable
-private fun StreamIcon(label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(38.dp).clip(RoundedCornerShape(50)).background(Color(0x40000000)).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Text(label, color = Color.White, fontSize = 18.sp) }
+private enum class OverlayGlyph { QUALITY, CONTROLS, DISPLAY, POWER }
+
+private fun nextPreset(p: Preset): Preset = when (p) {
+    Preset.PERFORMANCE -> Preset.BALANCED
+    Preset.BALANCED -> Preset.QUALITY
+    else -> Preset.PERFORMANCE   // QUALITY or CUSTOM wrap to Performance
 }
 
-/** The in-stream menu (Remote Play style): a translucent overlay with status + Disconnect. */
 @Composable
-private fun StreamMenu(status: String, onResume: () -> Unit, onDisconnect: () -> Unit) {
-    Box(
-        Modifier.fillMaxSize().background(Color(0xBB05080F)).clickable(onClick = onResume),
-        contentAlignment = Alignment.Center,
+private fun StreamStatusChip(status: String, pingMs: Int, modifier: Modifier) {
+    val connected = status == "Connected"
+    val net = dev.pulseplay.net.NetworkMonitor.label()
+    val dot = when {
+        !connected || pingMs < 0 -> Muted
+        pingMs < 40 -> Good
+        pingMs < 100 -> Color(0xFFE0B24A)
+        else -> Color(0xFFF0A05A)
+    }
+    Row(
+        modifier.clip(RoundedCornerShape(50)).background(Color(0x80000000)).padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            Modifier.width(300.dp).clip(RoundedCornerShape(20.dp)).background(Panel).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("PlayStation 5", color = OnDark, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(status, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 22.dp))
-            Button(onClick = onResume, colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                Text("Resume", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(dot))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (!connected) status else if (pingMs < 0) "Connected · $net" else "$pingMs ms · $net",
+            color = Color(0xE6FFFFFF), fontSize = 12.sp, fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun StreamControlBar(onQuality: () -> Unit, onControls: () -> Unit, onDisplay: () -> Unit, onDisconnect: () -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(20.dp)).background(Color(0xDB0E131D)).padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OverlayButton(OverlayGlyph.QUALITY, "Quality", false, onQuality)
+        OverlayButton(OverlayGlyph.CONTROLS, "Controls", false, onControls)
+        OverlayButton(OverlayGlyph.DISPLAY, "Display", false, onDisplay)
+        Box(Modifier.width(1.dp).height(34.dp).background(Color(0x1AFFFFFF)))
+        OverlayButton(OverlayGlyph.POWER, "Disconnect", true, onDisconnect)
+    }
+}
+
+@Composable
+private fun OverlayButton(glyph: OverlayGlyph, label: String, danger: Boolean, onClick: () -> Unit) {
+    Column(
+        Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        OverlayIcon(glyph, if (danger) Color(0xFFFF6B6B) else OnDark)
+        Spacer(Modifier.height(5.dp))
+        Text(label, color = if (danger) Color(0xFFFF8585) else Muted, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun OverlayIcon(glyph: OverlayGlyph, tint: Color) {
+    androidx.compose.foundation.Canvas(Modifier.size(23.dp)) {
+        val s = size.minDimension
+        val st = s * 0.085f
+        val cap = androidx.compose.ui.graphics.StrokeCap.Round
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = st, cap = cap, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+        fun o(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(s * x, s * y)
+        when (glyph) {
+            OverlayGlyph.QUALITY -> {   // sliders / equalizer
+                drawLine(tint, o(0.14f, 0.34f), o(0.86f, 0.34f), strokeWidth = st, cap = cap)
+                drawLine(tint, o(0.14f, 0.66f), o(0.86f, 0.66f), strokeWidth = st, cap = cap)
+                drawCircle(tint, s * 0.1f, o(0.66f, 0.34f))
+                drawCircle(tint, s * 0.1f, o(0.36f, 0.66f))
             }
-            Spacer(Modifier.height(10.dp))
-            Button(onClick = onDisconnect, colors = ButtonDefaults.buttonColors(containerColor = Color(0x22F85149)),
-                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                Text("Disconnect", color = Color(0xFFF85149), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            OverlayGlyph.CONTROLS -> {  // gamepad
+                drawRoundRect(
+                    tint, topLeft = o(0.08f, 0.33f),
+                    size = androidx.compose.ui.geometry.Size(s * 0.84f, s * 0.34f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.17f, s * 0.17f), style = stroke,
+                )
+                drawCircle(tint, s * 0.05f, o(0.3f, 0.5f))
+                drawCircle(tint, s * 0.05f, o(0.7f, 0.5f))
+            }
+            OverlayGlyph.DISPLAY -> {   // screen / aspect
+                drawRoundRect(
+                    tint, topLeft = o(0.12f, 0.22f),
+                    size = androidx.compose.ui.geometry.Size(s * 0.76f, s * 0.56f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.1f, s * 0.1f), style = stroke,
+                )
+            }
+            OverlayGlyph.POWER -> {     // power
+                drawArc(
+                    tint, -55f, 290f, false, topLeft = o(0.22f, 0.26f),
+                    size = androidx.compose.ui.geometry.Size(s * 0.56f, s * 0.56f), style = stroke,
+                )
+                drawLine(tint, o(0.5f, 0.14f), o(0.5f, 0.48f), strokeWidth = st, cap = cap)
             }
         }
     }
 }
+
