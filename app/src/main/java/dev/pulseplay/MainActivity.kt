@@ -64,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -912,13 +913,6 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
             }
         }, modifier = videoMod)
 
-        // Tap empty video to reveal the control bar. Drawn below the pad so the pad
-        // keeps its own touches; taps on empty areas fall through to here.
-        Box(Modifier.fillMaxSize().clickable(
-            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-            indication = null,
-        ) { barVisible = true; poke++ })
-
         // On-screen controls, hidden live once a physical controller is in use (unless forced on).
         if (StreamPrefs.alwaysShowControls || !ActiveStream.hasGamepadState.value) GamepadOverlay()
 
@@ -945,7 +939,40 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
                 onDisconnect = onExit,
             )
         }
+
+        // Two-finger tap anywhere reveals/hides the control bar. Topmost layer, but
+        // it never consumes, so single-finger touches still reach the sticks/buttons
+        // below. Only a quick two-finger tap with no drag toggles the bar, so playing
+        // (one thumb per stick, or dragging) can't trigger it by accident.
+        TwoFingerTapToReveal { barVisible = !barVisible; poke++ }
     }
+}
+
+/**
+ * Non-consuming two-finger-tap detector. Observes the whole gesture; fires only when
+ * at most-two-or-more fingers touched, none of them dragged, and the whole thing was
+ * quick — i.e. a deliberate two-finger tap, not stick movement.
+ */
+@Composable
+private fun TwoFingerTapToReveal(onTwoFingerTap: () -> Unit) {
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent()                       // first contact of a new gesture
+                val start = System.currentTimeMillis()
+                var maxFingers = 0
+                var moved = false
+                while (true) {
+                    val e = awaitPointerEvent()
+                    val pressed = e.changes.count { it.pressed }
+                    if (pressed > maxFingers) maxFingers = pressed
+                    if (e.changes.any { it.pressed && (it.position - it.previousPosition).getDistance() > 24f }) moved = true
+                    if (e.changes.none { it.pressed }) break   // all fingers lifted
+                }
+                if (maxFingers >= 2 && !moved && System.currentTimeMillis() - start < 500) onTwoFingerTap()
+            }
+        }
+    })
 }
 
 private enum class OverlayGlyph { QUALITY, CONTROLS, DISPLAY, POWER }
