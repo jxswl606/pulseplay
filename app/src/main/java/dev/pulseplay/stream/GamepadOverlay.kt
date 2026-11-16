@@ -97,16 +97,66 @@ fun GamepadOverlay() {
             Stick { x, y -> ActiveStream.rightStick(x, y) }
         }
 
-        // System row, bottom-center.
+        // System buttons: small, low-opacity glyphs tucked bottom-center so they
+        // stop covering the game — Create · Home(PS) · Options · Touchpad.
         Row(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).alpha(0.78f),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Pill("Create", ControllerState.BUTTON_SHARE)
-            Glyph("P", ControllerState.BUTTON_PS)                 // PS button
-            Pill("Options", ControllerState.BUTTON_OPTIONS)
-            TouchpadButton()
+            SysBtn(SysGlyph.CREATE, ControllerState.BUTTON_SHARE)
+            SysBtn(SysGlyph.HOME, ControllerState.BUTTON_PS)
+            SysBtn(SysGlyph.OPTIONS, ControllerState.BUTTON_OPTIONS)
+            SysBtn(SysGlyph.TOUCHPAD, ControllerState.BUTTON_TOUCHPAD, wide = true)
+        }
+    }
+}
+
+private enum class SysGlyph { CREATE, HOME, OPTIONS, TOUCHPAD }
+
+/** A small, translucent system button showing a drawn glyph (no text). */
+@Composable
+private fun SysBtn(glyph: SysGlyph, mask: UInt, wide: Boolean = false) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        Modifier.size(width = if (wide) 50.dp else 40.dp, height = 30.dp)
+            .background(Color(0x1FFFFFFF), shape).border(1.dp, Color(0x3DFFFFFF), shape)
+            .then(pressMod({ ActiveStream.button(mask, true) }, { ActiveStream.button(mask, false) })),
+        contentAlignment = Alignment.Center,
+    ) { SysIcon(glyph) }
+}
+
+@Composable
+private fun SysIcon(glyph: SysGlyph) {
+    androidx.compose.foundation.Canvas(Modifier.size(17.dp)) {
+        val s = size.minDimension
+        val st = s * 0.09f
+        val cap = androidx.compose.ui.graphics.StrokeCap.Round
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = st, cap = cap, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+        fun o(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(s * x, s * y)
+        val c = Color.White
+        when (glyph) {
+            SysGlyph.CREATE -> {   // split capture rectangle
+                drawRoundRect(c, topLeft = o(0.14f, 0.3f), size = androidx.compose.ui.geometry.Size(s * 0.72f, s * 0.4f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.1f, s * 0.1f), style = stroke)
+                drawLine(c, o(0.5f, 0.32f), o(0.5f, 0.68f), strokeWidth = st, cap = cap)
+            }
+            SysGlyph.HOME -> {     // house
+                drawLine(c, o(0.2f, 0.52f), o(0.5f, 0.24f), strokeWidth = st, cap = cap)
+                drawLine(c, o(0.5f, 0.24f), o(0.8f, 0.52f), strokeWidth = st, cap = cap)
+                drawLine(c, o(0.29f, 0.47f), o(0.29f, 0.76f), strokeWidth = st, cap = cap)
+                drawLine(c, o(0.71f, 0.47f), o(0.71f, 0.76f), strokeWidth = st, cap = cap)
+                drawLine(c, o(0.29f, 0.76f), o(0.71f, 0.76f), strokeWidth = st, cap = cap)
+            }
+            SysGlyph.OPTIONS -> {  // three lines
+                drawLine(c, o(0.2f, 0.33f), o(0.8f, 0.33f), strokeWidth = st, cap = cap)
+                drawLine(c, o(0.2f, 0.5f), o(0.8f, 0.5f), strokeWidth = st, cap = cap)
+                drawLine(c, o(0.2f, 0.67f), o(0.8f, 0.67f), strokeWidth = st, cap = cap)
+            }
+            SysGlyph.TOUCHPAD -> { // the pad's rectangle
+                drawRoundRect(c, topLeft = o(0.13f, 0.27f), size = androidx.compose.ui.geometry.Size(s * 0.74f, s * 0.46f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.12f, s * 0.12f), style = stroke)
+            }
         }
     }
 }
@@ -142,23 +192,6 @@ private fun Trapezoid(label: String, shape: Shape, onPress: (Boolean) -> Unit) {
     ) { Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium) }
 }
 
-@Composable
-private fun Pill(label: String, mask: UInt) {
-    val shape = RoundedCornerShape(50)
-    Box(
-        Modifier.size(width = 74.dp, height = 36.dp).background(Glass, shape).border(1.dp, Edge, shape)
-            .then(pressMod({ ActiveStream.button(mask, true) }, { ActiveStream.button(mask, false) })),
-        contentAlignment = Alignment.Center,
-    ) { Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
-}
-
-/** A round system glyph button (PS). */
-@Composable
-private fun Glyph(label: String, mask: UInt) {
-    RoundBtn(48.dp, { d -> ActiveStream.button(mask, d) }) {
-        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-    }
-}
 
 @Composable
 private fun FaceButtons() {
@@ -195,16 +228,6 @@ private fun DPadKey(label: String, mask: UInt, shape: Shape) {
             .then(pressMod({ ActiveStream.button(mask, true) }, { ActiveStream.button(mask, false) })),
         contentAlignment = Alignment.Center,
     ) { Text(label, color = Color.White, fontSize = 14.sp) }
-}
-
-@Composable
-private fun TouchpadButton() {
-    val shape = RoundedCornerShape(50)
-    Box(
-        Modifier.size(width = 56.dp, height = 36.dp).background(Glass, shape).border(1.dp, Edge, shape)
-            .then(pressMod({ ActiveStream.button(ControllerState.BUTTON_TOUCHPAD, true) }, { ActiveStream.button(ControllerState.BUTTON_TOUCHPAD, false) })),
-        contentAlignment = Alignment.Center,
-    ) { Text("⋯⋯", color = Color.White, fontSize = 13.sp) }
 }
 
 @Composable
