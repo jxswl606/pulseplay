@@ -570,6 +570,7 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
     var bw by remember { mutableStateOf(StreamPrefs.bitrateLabel()) }
     var controls by remember { mutableStateOf(StreamPrefs.controlsLabel()) }
     var opacity by remember { mutableStateOf(StreamPrefs.opacityLabel()) }
+    var sticks by remember { mutableStateOf(StreamPrefs.sticksLabel()) }
     var fillSel by remember { mutableStateOf(StreamPrefs.fillMode) }
     val scope = rememberCoroutineScope()
     var testing by remember { mutableStateOf(false) }
@@ -611,6 +612,7 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
 
         GroupLabel("CONTROLS")
         Column(cardMod) {
+            SettingRow("On-screen sticks", sticks, onClick = { StreamPrefs.toggleDynamicSticks(); sticks = StreamPrefs.sticksLabel() })
             SettingRow("Controller & touch", controls, onClick = { StreamPrefs.toggleControls(); controls = StreamPrefs.controlsLabel() })
             SettingRow("On-screen controls opacity", opacity, onClick = { StreamPrefs.cycleOpacity(); opacity = StreamPrefs.opacityLabel() })
         }

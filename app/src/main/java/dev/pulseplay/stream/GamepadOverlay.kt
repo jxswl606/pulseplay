@@ -72,49 +72,131 @@ private val RightTrap = GenericShape { s, _ ->
 
 @Composable
 fun GamepadOverlay() {
-    BoxWithConstraints(Modifier.fillMaxSize().alpha(StreamPrefs.overlayAlpha).padding(horizontal = 14.dp, vertical = 12.dp)) {
-        // Scale every control to the screen height (360dp baseline), clamped sane.
-        val scale = (maxHeight / 360.dp).coerceIn(0.68f, 1.3f)
+    val dyn = StreamPrefs.dynamicSticks
+    Box(Modifier.fillMaxSize()) {
+        // Floating sticks: a full-screen, unpadded layer UNDER the buttons. Buttons
+        // consume their own touches (see pressMod), so everything left/right of them
+        // spawns a stick under the thumb.
+        if (dyn) FloatingSticks()
 
-        // Shoulders: top corners, stacked, sitting clear below the status chip.
-        Column(Modifier.align(Alignment.TopStart).padding(top = 42.dp), verticalArrangement = Arrangement.spacedBy(8.dp * scale)) {
-            Trapezoid("L2", LeftTrap, scale) { d -> ActiveStream.trigger(true, if (d) 1f else 0f) }
-            Trapezoid("L1", LeftTrap, scale) { d -> ActiveStream.button(ControllerState.BUTTON_L1, d) }
-        }
-        Column(Modifier.align(Alignment.TopEnd).padding(top = 42.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp * scale)) {
-            Trapezoid("R2", RightTrap, scale) { d -> ActiveStream.trigger(false, if (d) 1f else 0f) }
-            Trapezoid("R1", RightTrap, scale) { d -> ActiveStream.button(ControllerState.BUTTON_R1, d) }
-        }
+        BoxWithConstraints(Modifier.fillMaxSize().alpha(StreamPrefs.overlayAlpha).padding(horizontal = 14.dp, vertical = 12.dp)) {
+            // Scale every control to the screen height (360dp baseline), clamped sane.
+            val scale = (maxHeight / 360.dp).coerceIn(0.68f, 1.3f)
 
-        // Bottom-left: D-pad (outer) + left stick (inner), side by side.
-        Row(Modifier.align(Alignment.BottomStart), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp * scale)) {
-            DPad(scale)
-            Stick(scale) { x, y -> ActiveStream.leftStick(x, y) }
-        }
+            // Shoulders: top corners, stacked, sitting clear below the status chip.
+            Column(Modifier.align(Alignment.TopStart).padding(top = 42.dp), verticalArrangement = Arrangement.spacedBy(8.dp * scale)) {
+                Trapezoid("L2", LeftTrap, scale) { d -> ActiveStream.trigger(true, if (d) 1f else 0f) }
+                Trapezoid("L1", LeftTrap, scale) { d -> ActiveStream.button(ControllerState.BUTTON_L1, d) }
+            }
+            Column(Modifier.align(Alignment.TopEnd).padding(top = 42.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp * scale)) {
+                Trapezoid("R2", RightTrap, scale) { d -> ActiveStream.trigger(false, if (d) 1f else 0f) }
+                Trapezoid("R1", RightTrap, scale) { d -> ActiveStream.button(ControllerState.BUTTON_R1, d) }
+            }
 
-        // Bottom-right: right stick (inner) + face buttons (outer), side by side.
-        Row(Modifier.align(Alignment.BottomEnd), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp * scale)) {
-            Stick(scale) { x, y -> ActiveStream.rightStick(x, y) }
-            FaceButtons(scale)
-        }
+            // Bottom-left: D-pad, plus the fixed left stick only when not floating.
+            Row(Modifier.align(Alignment.BottomStart), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp * scale)) {
+                DPad(scale)
+                if (!dyn) Stick(scale) { x, y -> ActiveStream.leftStick(x, y) }
+            }
 
-        // System buttons: small, translucent, bottom-center between the thumb clusters.
-        Row(
-            Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).alpha(0.78f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp * scale),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SysBtn(SysGlyph.CREATE, ControllerState.BUTTON_SHARE, scale)
-            SysBtn(SysGlyph.HOME, ControllerState.BUTTON_PS, scale)
-            SysBtn(SysGlyph.OPTIONS, ControllerState.BUTTON_OPTIONS, scale)
-            SysBtn(SysGlyph.TOUCHPAD, ControllerState.BUTTON_TOUCHPAD, scale, wide = true)
+            // Bottom-right: face buttons, plus the fixed right stick only when not floating.
+            Row(Modifier.align(Alignment.BottomEnd), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp * scale)) {
+                if (!dyn) Stick(scale) { x, y -> ActiveStream.rightStick(x, y) }
+                FaceButtons(scale)
+            }
+
+            // System buttons: small, translucent, bottom-center between the thumb clusters.
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).alpha(0.78f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp * scale),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SysBtn(SysGlyph.CREATE, ControllerState.BUTTON_SHARE, scale)
+                SysBtn(SysGlyph.HOME, ControllerState.BUTTON_PS, scale)
+                SysBtn(SysGlyph.OPTIONS, ControllerState.BUTTON_OPTIONS, scale)
+                SysBtn(SysGlyph.TOUCHPAD, ControllerState.BUTTON_TOUCHPAD, scale, wide = true)
+            }
         }
     }
 }
 
+/**
+ * Remote Play-style floating sticks. The left ~42% of the screen drives the left
+ * stick, the right ~42% the right stick; touch spawns the stick under your thumb,
+ * drag steers, release clears it. Button touches (consumed by the buttons drawn
+ * above this layer) are ignored. Multi-touch: both sticks work at once.
+ */
+@Composable
+private fun FloatingSticks() {
+    var leftOrigin by remember { mutableStateOf<Offset?>(null) }
+    var leftPos by remember { mutableStateOf(Offset.Zero) }
+    var rightOrigin by remember { mutableStateOf<Offset?>(null) }
+    var rightPos by remember { mutableStateOf(Offset.Zero) }
+
+    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+        val radiusPx = 56.dp.toPx()
+        val leftEdge = size.width * 0.42f
+        val rightEdge = size.width * 0.58f
+        var leftId: androidx.compose.ui.input.pointer.PointerId? = null
+        var rightId: androidx.compose.ui.input.pointer.PointerId? = null
+
+        fun steer(origin: Offset, p: Offset): Offset {
+            var d = p - origin
+            val len = sqrt(d.x * d.x + d.y * d.y)
+            if (len > radiusPx) d *= (radiusPx / len)
+            return d
+        }
+
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                for (c in event.changes) {
+                    val down = c.pressed && !c.previousPressed
+                    val up = !c.pressed && c.previousPressed
+                    when {
+                        down && !c.isConsumed && c.position.x < leftEdge && leftId == null -> {
+                            leftId = c.id; leftOrigin = c.position; leftPos = c.position
+                            ActiveStream.leftStick(0f, 0f); c.consume()
+                        }
+                        down && !c.isConsumed && c.position.x > rightEdge && rightId == null -> {
+                            rightId = c.id; rightOrigin = c.position; rightPos = c.position
+                            ActiveStream.rightStick(0f, 0f); c.consume()
+                        }
+                        up && c.id == leftId -> { leftId = null; leftOrigin = null; ActiveStream.leftStick(0f, 0f); c.consume() }
+                        up && c.id == rightId -> { rightId = null; rightOrigin = null; ActiveStream.rightStick(0f, 0f); c.consume() }
+                        c.pressed && c.id == leftId -> {
+                            val o = leftOrigin ?: c.position
+                            val d = steer(o, c.position); leftPos = o + d
+                            ActiveStream.leftStick(d.x / radiusPx, d.y / radiusPx); c.consume()
+                        }
+                        c.pressed && c.id == rightId -> {
+                            val o = rightOrigin ?: c.position
+                            val d = steer(o, c.position); rightPos = o + d
+                            ActiveStream.rightStick(d.x / radiusPx, d.y / radiusPx); c.consume()
+                        }
+                    }
+                }
+            }
+        }
+    }) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val r = 56.dp.toPx()
+            leftOrigin?.let { o -> drawFloatingStick(o, leftPos, r) }
+            rightOrigin?.let { o -> drawFloatingStick(o, rightPos, r) }
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFloatingStick(origin: Offset, pos: Offset, r: Float) {
+    drawCircle(Color(0x22FFFFFF), r, origin)                                   // base
+    drawCircle(Color(0x59FFFFFF), r, origin, style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.045f))  // ring
+    drawCircle(Color(0x8CFFFFFF), r * 0.46f, pos)                             // thumb nub
+}
+
 private fun pressMod(onDown: () -> Unit, onUp: () -> Unit) = Modifier.pointerInput(Unit) {
     awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false)
+        // Consume the down so the floating-stick layer below ignores button touches.
+        awaitFirstDown(requireUnconsumed = false).also { it.consume() }
         onDown()
         waitForUpOrCancellation()
         onUp()

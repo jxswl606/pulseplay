@@ -33,6 +33,11 @@ object StreamPrefs {
     @Volatile var overlayAlpha: Float = 0.85f
     @Volatile var fillMode: FillMode = FillMode.STRETCH     // default: fill the whole screen
     fun setFillMode(m: FillMode) { fillMode = m; persist() }
+    // Floating sticks (Remote Play style): touch anywhere left/right and the stick
+    // spawns under your thumb, instead of a fixed on-screen circle.
+    @Volatile var dynamicSticks: Boolean = true
+    fun toggleDynamicSticks() { dynamicSticks = !dynamicSticks; persist() }
+    fun sticksLabel() = if (dynamicSticks) "Floating (Remote Play)" else "Fixed"
     private var prefs: android.content.SharedPreferences? = null
 
     val bitrateSteps = listOf(0, 5, 8, 10, 12, 15, 20, 25, 30, 40)     // 0 = Auto (Mbps)
@@ -95,13 +100,14 @@ object StreamPrefs {
         alwaysShowControls = p.getBoolean("alwaysControls", false)
         overlayAlpha = p.getFloat("overlayAlpha", 0.85f)
         fillMode = runCatching { FillMode.valueOf(p.getString("fill", null) ?: "STRETCH") }.getOrDefault(FillMode.STRETCH)
+        dynamicSticks = p.getBoolean("dynSticks", true)
     }
 
     private fun persist() {
         prefs?.edit()?.apply {
             putString("res", res.name); putString("fps", fps.name); putString("codec", codec.name)
             putInt("bitrate", bitrateMbps); putBoolean("alwaysControls", alwaysShowControls); putFloat("overlayAlpha", overlayAlpha)
-            putString("fill", fillMode.name)
+            putString("fill", fillMode.name); putBoolean("dynSticks", dynamicSticks)
             apply()
         }
     }
