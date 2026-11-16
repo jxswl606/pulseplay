@@ -88,6 +88,7 @@ import dev.pulseplay.stream.Res
 import dev.pulseplay.stream.Fps
 import dev.pulseplay.stream.Preset
 import dev.pulseplay.stream.FillMode
+import dev.pulseplay.stream.ConsoleStatus
 import dev.pulseplay.stream.StreamSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -103,6 +104,16 @@ private val Accent = Color(0xFF1B8CFF)
 private val OnDark = Color(0xFFE8EEF8)
 private val Muted = Color(0xFF7B8AA3)
 private val Good = Color(0xFF3AD17F)
+private val Rest = Color(0xFFE0B24A)          // rest-mode amber
+private val Bad  = Color(0xFFF85149)          // offline red
+
+/** Status dot color for the console's live power state (Remote Play style). */
+private fun consoleDotColor(s: ConsoleStatus.State) = when (s) {
+    ConsoleStatus.State.ONLINE -> Good
+    ConsoleStatus.State.REST -> Rest
+    ConsoleStatus.State.OFFLINE -> Bad
+    ConsoleStatus.State.CHECKING -> Muted
+}
 
 private val Colors = darkColorScheme(
     primary = Accent, background = Bg0, surface = Panel,
@@ -126,6 +137,7 @@ class MainActivity : ComponentActivity() {
         ConsoleStore.init(this)
         StreamPrefs.init(this)
         dev.pulseplay.net.NetworkMonitor.init(this)
+        dev.pulseplay.stream.ConsoleStatus.start()
         enableEdgeToEdge()
         hideSystemBars()
         setContent {
@@ -335,7 +347,6 @@ private fun NavIcon(tab: Tab, tint: Color) {
 private fun HomeContent(onStream: (String?) -> Unit, navTo: (Tab) -> Unit) {
     val console = ConsoleStore.console
     val offline = dev.pulseplay.net.NetworkMonitor.offline()
-    val netLabel = dev.pulseplay.net.NetworkMonitor.label()
     // Real games pulled from the console (only when it's paired and reachable). No
     // console / offline / can't-load → the strip is simply hidden, never faked.
     var games by remember { mutableStateOf<List<HelperClient.Game>?>(null) }
@@ -370,10 +381,10 @@ private fun HomeContent(onStream: (String?) -> Unit, navTo: (Tab) -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text("My PS5", color = OnDark, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (console == null) Muted else if (offline) Color(0xFFF85149) else Good))
+                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (console == null) Muted else consoleDotColor(ConsoleStatus.state)))
                         Spacer(Modifier.width(6.dp))
-                        Text(if (console == null) "Not paired" else if (offline) "Not connected" else netLabel,
-                            color = if (console != null && offline) Color(0xFFF85149) else Muted, fontSize = 12.sp)
+                        Text(if (console == null) "Not paired" else ConsoleStatus.label(),
+                            color = if (console != null && ConsoleStatus.state == ConsoleStatus.State.OFFLINE) Color(0xFFF85149) else Muted, fontSize = 12.sp)
                     }
                 }
                 Text("›", color = Muted, fontSize = 18.sp)
@@ -427,7 +438,6 @@ private fun Ps5Art(modifier: Modifier) {
 private fun ConsolesContent(onStream: (String?) -> Unit, onPair: () -> Unit) {
     val console = ConsoleStore.console
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val offline = dev.pulseplay.net.NetworkMonitor.offline()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("Consoles", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(18.dp))
@@ -438,9 +448,13 @@ private fun ConsolesContent(onStream: (String?) -> Unit, onPair: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text("My PS5", color = OnDark, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (offline) Color(0xFFF85149) else Good))
+                        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(consoleDotColor(ConsoleStatus.state)))
                         Spacer(Modifier.width(6.dp))
-                        Text(if (offline) "Not connected" else "${console.host} · Online", color = Muted, fontSize = 12.sp)
+                        Text("${console.host} · ${ConsoleStatus.label()}",
+                            color = if (ConsoleStatus.state == ConsoleStatus.State.OFFLINE) Color(0xFFF85149) else Muted, fontSize = 12.sp)
+                    }
+                    ConsoleStatus.runningApp?.takeIf { it.isNotBlank() && ConsoleStatus.state == ConsoleStatus.State.ONLINE }?.let { app ->
+                        Text("Playing $app", color = Accent, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
                 Button(onClick = {
