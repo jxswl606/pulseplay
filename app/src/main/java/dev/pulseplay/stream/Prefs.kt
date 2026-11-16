@@ -32,7 +32,9 @@ object StreamPrefs {
     @Volatile var alwaysShowControls: Boolean = false
     @Volatile var overlayAlpha: Float = 0.85f
     @Volatile var fillMode: FillMode = FillMode.STRETCH     // default: fill the whole screen
-    fun setFillMode(m: FillMode) { fillMode = m; persist() }
+    // applyFillMode, not setFillMode: `var fillMode` already generates a setFillMode(FillMode)
+    // JVM method, so a fun setFillMode would be a platform declaration clash.
+    fun applyFillMode(m: FillMode) { fillMode = m; persist() }
     // Floating sticks (Remote Play style): touch anywhere left/right and the stick
     // spawns under your thumb, instead of a fixed on-screen circle.
     @Volatile var dynamicSticks: Boolean = true

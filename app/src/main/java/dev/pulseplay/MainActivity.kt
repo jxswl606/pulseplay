@@ -606,7 +606,7 @@ private fun SettingsContent(onForget: () -> Unit = {}) {
             SegmentedRow("Frame rate", Fps.values().map { it.label }, Fps.values().indexOf(fpsSel)) { i -> StreamPrefs.applyFps(Fps.values()[i]); sync() }
             StepperRow("Bandwidth", bw, onMinus = { StreamPrefs.stepBitrate(false); sync() }, onPlus = { StreamPrefs.stepBitrate(true); sync() })
             SegmentedRow("Display", FillMode.values().map { it.label }, FillMode.values().indexOf(fillSel)) { i ->
-                StreamPrefs.setFillMode(FillMode.values()[i]); fillSel = FillMode.values()[i]
+                StreamPrefs.applyFillMode(FillMode.values()[i]); fillSel = FillMode.values()[i]
             }
         }
 
@@ -939,7 +939,7 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
                 onQuality = { StreamPrefs.applyPreset(nextPreset(StreamPrefs.currentPreset())); onReconnect() },
                 onControls = { StreamPrefs.toggleControls(); poke++ },
                 onDisplay = {
-                    StreamPrefs.setFillMode(if (StreamPrefs.fillMode == FillMode.STRETCH) FillMode.FIT else FillMode.STRETCH)
+                    StreamPrefs.applyFillMode(if (StreamPrefs.fillMode == FillMode.STRETCH) FillMode.FIT else FillMode.STRETCH)
                     poke++
                 },
                 onDisconnect = onExit,
