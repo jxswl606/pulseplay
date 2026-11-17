@@ -171,14 +171,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Route a physical controller's input into the live stream.
+    private var lastNavMs = 0L
+
+    // While streaming, controller input goes to the PS5. On the menus, up/down moves
+    // the highlighted tab directly (d-pad and analog stick), so the blue selection
+    // follows the stick instead of only moving on select.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (ActiveStream.session != null && ActiveStream.onKey(event)) return true
+        if (ActiveStream.session != null) {
+            if (ActiveStream.onKey(event)) return true
+        } else if (event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> { MenuNav.onMove?.invoke(-1); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { MenuNav.onMove?.invoke(1); return true }
+            }
+        }
         return super.dispatchKeyEvent(event)
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        if (ActiveStream.session != null && ActiveStream.onMotion(event)) return true
+        if (ActiveStream.session != null) {
+            if (ActiveStream.onMotion(event)) return true
+        } else if (event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK) {
+            val y = event.getAxisValue(MotionEvent.AXIS_Y) + event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            if (kotlin.math.abs(y) > 0.6f) {
+                val now = System.currentTimeMillis()
+                if (now - lastNavMs > 260) { lastNavMs = now; MenuNav.onMove?.invoke(if (y < 0) -1 else 1) }
+                return true
+            } else lastNavMs = 0L     // re-centered: next push moves immediately
+        }
         return super.dispatchGenericMotionEvent(event)
     }
 
@@ -244,9 +264,17 @@ private fun SplashScreen(onDone: () -> Unit) {
     }
 }
 
+/** Bridge: the Activity's controller handler moves the menu selection through this. */
+private object MenuNav { var onMove: ((Int) -> Unit)? = null }
+
 @Composable
 private fun HomeScreen(onStream: (String?) -> Unit, onPair: () -> Unit) {
     var tab by remember { mutableStateOf(Tab.HOME) }
+    // Let a physical controller move the highlighted tab (see dispatchKeyEvent/Motion).
+    DisposableEffect(Unit) {
+        MenuNav.onMove = { d -> val v = Tab.values(); tab = v[(v.indexOf(tab) + d).coerceIn(0, v.lastIndex)] }
+        onDispose { MenuNav.onMove = null }
+    }
     Row(Modifier.fillMaxSize()) {
         Sidebar(tab) { tab = it }
         Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 30.dp, vertical = 26.dp)) {
