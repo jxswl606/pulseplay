@@ -93,15 +93,17 @@ fun GamepadOverlay() {
                 Trapezoid("R1", RightTrap, scale) { d -> ActiveStream.button(ControllerState.BUTTON_R1, d) }
             }
 
-            // Bottom-left: D-pad, plus the fixed left stick only when not floating.
+            // Bottom-left: D-pad, with L3 inboard, plus the fixed left stick only when not floating.
             Row(Modifier.align(Alignment.BottomStart), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp * scale)) {
                 DPad(scale)
+                StickClickBtn("L3", ControllerState.BUTTON_L3, scale)
                 if (!dyn) Stick(scale) { x, y -> ActiveStream.leftStick(x, y) }
             }
 
-            // Bottom-right: face buttons, plus the fixed right stick only when not floating.
+            // Bottom-right: face buttons, with R3 inboard, plus the fixed right stick only when not floating.
             Row(Modifier.align(Alignment.BottomEnd), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp * scale)) {
                 if (!dyn) Stick(scale) { x, y -> ActiveStream.rightStick(x, y) }
+                StickClickBtn("R3", ControllerState.BUTTON_R3, scale)
                 FaceButtons(scale)
             }
 
@@ -111,12 +113,9 @@ fun GamepadOverlay() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp * scale),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StickClickBtn("L3", ControllerState.BUTTON_L3, scale)
-                SysBtn(SysGlyph.CREATE, ControllerState.BUTTON_SHARE, scale)
-                SysBtn(SysGlyph.HOME, ControllerState.BUTTON_PS, scale)
-                SysBtn(SysGlyph.OPTIONS, ControllerState.BUTTON_OPTIONS, scale)
-                SysBtn(SysGlyph.TOUCHPAD, ControllerState.BUTTON_TOUCHPAD, scale, wide = true)
-                StickClickBtn("R3", ControllerState.BUTTON_R3, scale)
+                SysBtn(SysGlyph.CREATE, ControllerState.BUTTON_SHARE, scale)   // Create / screenshot
+                SysBtn(SysGlyph.HOME, ControllerState.BUTTON_PS, scale)        // PS / Home
+                SysBtn(SysGlyph.OPTIONS, ControllerState.BUTTON_OPTIONS, scale) // Options / Start
             }
         }
     }
@@ -137,10 +136,17 @@ private fun FloatingSticks() {
 
     Box(Modifier.fillMaxSize().pointerInput(Unit) {
         val radiusPx = 56.dp.toPx()
-        val leftEdge = size.width * 0.42f
-        val rightEdge = size.width * 0.58f
+        // Three zones, like the sticks you asked for: left 40% = left stick, right 40% =
+        // right stick, middle 20% = touchpad (swipe = touchpad swipe, e.g. the wind).
+        val leftEdge = size.width * 0.40f
+        val rightEdge = size.width * 0.60f
+        val h = size.height.toFloat()
         var leftId: androidx.compose.ui.input.pointer.PointerId? = null
         var rightId: androidx.compose.ui.input.pointer.PointerId? = null
+        var centerId: androidx.compose.ui.input.pointer.PointerId? = null
+        var tpId = -1                       // chiaki touchpad touch id for the active swipe
+        var centerStart = Offset.Zero
+        var centerMoved = false
 
         fun steer(origin: Offset, p: Offset): Offset {
             var d = p - origin
@@ -148,6 +154,9 @@ private fun FloatingSticks() {
             if (len > radiusPx) d *= (radiusPx / len)
             return d
         }
+        // Normalize a point inside the center zone to 0..1 across the DualSense touchpad.
+        fun nx(p: Offset) = ((p.x - leftEdge) / (rightEdge - leftEdge)).coerceIn(0f, 1f)
+        fun ny(p: Offset) = (p.y / h).coerceIn(0f, 1f)
 
         awaitPointerEventScope {
             while (true) {
@@ -164,8 +173,18 @@ private fun FloatingSticks() {
                             rightId = c.id; rightOrigin = c.position; rightPos = c.position
                             ActiveStream.rightStick(0f, 0f); c.consume()
                         }
+                        down && !c.isConsumed && c.position.x >= leftEdge && c.position.x <= rightEdge && centerId == null -> {
+                            centerId = c.id; centerStart = c.position; centerMoved = false
+                            tpId = ActiveStream.touchStart(nx(c.position), ny(c.position)); c.consume()
+                        }
                         up && c.id == leftId -> { leftId = null; leftOrigin = null; ActiveStream.leftStick(0f, 0f); c.consume() }
                         up && c.id == rightId -> { rightId = null; rightOrigin = null; ActiveStream.rightStick(0f, 0f); c.consume() }
+                        up && c.id == centerId -> {
+                            ActiveStream.touchEnd(tpId)
+                            // A tap that never really moved = a touchpad click (map/menu).
+                            if (!centerMoved) { ActiveStream.button(ControllerState.BUTTON_TOUCHPAD, true); ActiveStream.button(ControllerState.BUTTON_TOUCHPAD, false) }
+                            centerId = null; tpId = -1; c.consume()
+                        }
                         c.pressed && c.id == leftId -> {
                             val o = leftOrigin ?: c.position
                             val d = steer(o, c.position); leftPos = o + d
@@ -175,6 +194,10 @@ private fun FloatingSticks() {
                             val o = rightOrigin ?: c.position
                             val d = steer(o, c.position); rightPos = o + d
                             ActiveStream.rightStick(d.x / radiusPx, d.y / radiusPx); c.consume()
+                        }
+                        c.pressed && c.id == centerId -> {
+                            if ((c.position - centerStart).getDistance() > 14f) centerMoved = true
+                            ActiveStream.touchMove(tpId, nx(c.position), ny(c.position)); c.consume()
                         }
                     }
                 }

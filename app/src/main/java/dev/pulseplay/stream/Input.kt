@@ -49,6 +49,26 @@ object ActiveStream {
         push(immediate = true)
     }
 
+    // ---------- touchpad (center zone) ----------
+    // The DualSense touchpad is a 1920x1080 surface. Map a normalized point (0..1 within
+    // the on-screen center zone) onto it and drive a chiaki touch, so a center-screen
+    // swipe becomes a real touchpad swipe — e.g. Ghost of Tsushima's guiding wind is a
+    // swipe up. Returns a touch id (or -1 if the touchpad already has its 2 touches).
+    private fun tx(n: Float) = (n.coerceIn(0f, 1f) * 1919f).toInt().toUShort()
+    private fun ty(n: Float) = (n.coerceIn(0f, 1f) * 1079f).toInt().toUShort()
+    fun touchStart(nx: Float, ny: Float): Int {
+        val id = state.startTouch(tx(nx), ty(ny)) ?: return -1
+        push(immediate = true); return id.toInt()
+    }
+    fun touchMove(id: Int, nx: Float, ny: Float) {
+        if (id < 0) return
+        state.setTouchPos(id.toUByte(), tx(nx), ty(ny)); push(immediate = false)
+    }
+    fun touchEnd(id: Int) {
+        if (id < 0) return
+        state.stopTouch(id.toUByte()); push(immediate = true)
+    }
+
     // Reset the pad flag too: ActiveStream is a singleton, so without this a physical
     // controller used once would keep the on-screen pad hidden for every later session,
     // even with no controller attached. Each stream re-detects on the next pad event.
