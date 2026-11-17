@@ -111,10 +111,12 @@ fun GamepadOverlay() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp * scale),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                StickClickBtn("L3", ControllerState.BUTTON_L3, scale)
                 SysBtn(SysGlyph.CREATE, ControllerState.BUTTON_SHARE, scale)
                 SysBtn(SysGlyph.HOME, ControllerState.BUTTON_PS, scale)
                 SysBtn(SysGlyph.OPTIONS, ControllerState.BUTTON_OPTIONS, scale)
                 SysBtn(SysGlyph.TOUCHPAD, ControllerState.BUTTON_TOUCHPAD, scale, wide = true)
+                StickClickBtn("R3", ControllerState.BUTTON_R3, scale)
             }
         }
     }
@@ -294,6 +296,19 @@ private fun Stick(scale: Float, onMove: (Float, Float) -> Unit) {
                 .size(nub).background(Nub, CircleShape).border(1.dp, Edge, CircleShape),
         )
     }
+}
+
+/** Small labelled pill that clicks a stick in (L3 / R3) — the sticks themselves can't be
+ *  "pressed" on a touchscreen, so these give you that button. */
+@Composable
+private fun StickClickBtn(label: String, mask: UInt, scale: Float) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        Modifier.size(width = 34.dp * scale, height = 28.dp * scale)
+            .background(Color(0x1FFFFFFF), shape).border(1.dp, Color(0x3DFFFFFF), shape)
+            .then(pressMod({ ActiveStream.button(mask, true) }, { ActiveStream.button(mask, false) })),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = Color.White, fontSize = (11 * scale).sp, fontWeight = FontWeight.Medium) }
 }
 
 private enum class SysGlyph { CREATE, HOME, OPTIONS, TOUCHPAD }
