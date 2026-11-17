@@ -64,6 +64,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -1004,13 +1006,21 @@ private fun StreamControlBar(onQuality: () -> Unit, onControls: () -> Unit, onDi
 
 @Composable
 private fun OverlayButton(glyph: OverlayGlyph, label: String, danger: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    // Clear highlight on the item you're touching, and bright labels so you can
+    // actually read them over the video.
+    val accent = if (danger) Color(0xFFFF6B6B) else OnDark
     Column(
-        Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 9.dp),
+        Modifier.clip(RoundedCornerShape(14.dp))
+            .background(if (pressed) (if (danger) Color(0x40FF6B6B) else Color(0x40FFFFFF)) else Color.Transparent)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        OverlayIcon(glyph, if (danger) Color(0xFFFF6B6B) else OnDark)
+        OverlayIcon(glyph, accent)
         Spacer(Modifier.height(5.dp))
-        Text(label, color = if (danger) Color(0xFFFF8585) else Muted, fontSize = 11.sp)
+        Text(label, color = if (danger) Color(0xFFFF9A9A) else Color(0xF2FFFFFF), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
