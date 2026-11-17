@@ -7,8 +7,6 @@ package dev.pulseplay
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -931,15 +929,24 @@ private fun StreamScreen(onExit: () -> Unit, onReconnect: () -> Unit) {
     // Stretch to fill the whole screen (default) or keep 16:9 with black bars.
     val videoMod = if (StreamPrefs.fillMode == FillMode.FIT) Modifier.aspectRatio(16f / 9f) else Modifier.fillMaxSize()
     Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        // TextureView, not SurfaceView: SurfaceView's surfaceDestroyed() blocks the main
+        // thread until the decoder releases the surface, which froze/ANR'd the app on
+        // Disconnect and on Quality reconnect. TextureView tears down without that block
+        // (this is why chiaki-ng offers a TextureView path). We detach the decoder first,
+        // then allow the texture to be released.
         AndroidView(factory = { ctx ->
-            SurfaceView(ctx).apply {
-                holder.addCallback(object : SurfaceHolder.Callback {
-                    // Attach in surfaceChanged (valid dimensions), detach in surfaceDestroyed —
-                    // exactly how chiaki-ng drives the decoder's surface.
-                    override fun surfaceCreated(h: SurfaceHolder) {}
-                    override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) { session.setSurface(h.surface) }
-                    override fun surfaceDestroyed(h: SurfaceHolder) { session.setSurface(null) }
-                })
+            android.view.TextureView(ctx).apply {
+                surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(st: android.graphics.SurfaceTexture, w: Int, h: Int) {
+                        session.setSurface(android.view.Surface(st))
+                    }
+                    override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, w: Int, h: Int) {}
+                    override fun onSurfaceTextureDestroyed(st: android.graphics.SurfaceTexture): Boolean {
+                        session.setSurface(null)   // detach the decoder before the texture goes
+                        return true
+                    }
+                    override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {}
+                }
             }
         }, modifier = videoMod)
 
