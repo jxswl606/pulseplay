@@ -11,3 +11,6 @@ const char *router_init(void);
 
 /* Handle one parsed request and reply on fd (which is then closed). */
 void route(int fd, const http_req *r);
+
+/* True once a device has paired (unlocked). Used to stop re-showing the code. */
+int router_paired(void);

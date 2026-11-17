@@ -28,6 +28,10 @@ static int authed(const http_req *r)
     return g_token[0] && !strcmp(r->token, g_token);
 }
 
+/* True once any device has unlocked (traded the trust code for a token). The
+ * on-screen notifier stops re-posting the code once this is set. */
+int router_paired(void) { return g_token[0] != '\0'; }
+
 void route(int fd, const http_req *r)
 {
     /* --- device trust: exchange the on-screen 6-digit code for a token --- */
